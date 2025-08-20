@@ -1,4 +1,7 @@
 // src/navigation/types.ts
+
+import type { ScheduledCall } from '@/domain/schedule/types';
+
 export type HomeStackParamList = {
   AppHome: undefined;
   Cuenta: undefined;
@@ -19,6 +22,12 @@ export type LlamadaStackParamList = {
   LlamadaRapida: undefined;
   AgendarLlamada: undefined;
   ContextosDeLlamada: undefined;
+
+  LlamadaEditor: {
+    initial?: ScheduledCall; // si viene, es edición; si no, es creación
+    // pasamos un callback para reportar el resultado al volver
+    onSubmit: (payload: Omit<ScheduledCall, 'id'>, id?: string) => void;
+  };
 };
 
 export type GrupoStackParamList = {

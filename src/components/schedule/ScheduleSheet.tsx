@@ -1,12 +1,14 @@
-// src/components/schedule/ScheduleSheet.tsx
+// src/components/dates/ScheduleSheet.tsx
 import React, { useMemo, useRef, useState } from 'react';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import DatePicker from 'react-native-date-picker';
 import { Calendar } from 'react-native-calendars';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, TextInput } from 'react-native';
+import { Ionicons } from '@react-native-vector-icons/ionicons';
 import DayPill from './DayPill';
 import { colors, spacing } from '@/theme';
 import { Weekday, ScheduledCall } from '@/domain/schedule/types';
+import { CONTEXT_PRESETS, VOICE_OPTIONS, DURATION_OPTIONS } from '@/domain/schedule/options';
 
 type Props = {
   initial?: Partial<ScheduledCall>;
@@ -19,9 +21,21 @@ export default function ScheduleSheet({ initial, onClose, onSave }: Props) {
   const snapPoints = useMemo(() => ['50%', '85%'], []);
   const [tab, setTab] = useState<'weekly'|'calendar'>(initial?.repeat?.type === 'oneoff' ? 'calendar' : 'weekly');
   const [time, setTime] = useState<Date>(initial?.timeISO ? new Date(initial.timeISO) : new Date());
-  const [days, setDays] = useState<Weekday[]>(initial?.repeat?.type==='weekly' ? initial.repeat.days : [1,3,5]);
-  const [dateISO, setDateISO] = useState<string | undefined>(initial?.repeat?.type==='oneoff' ? initial.repeat.dateISO : undefined);
-  const [note, setNote] = useState(initial?.note ?? '');
+  const [days, setDays] = useState<Weekday[]>(
+    initial?.repeat?.type==='weekly' ? initial.repeat.days : [1,3,5]
+  );
+  const [dateISO, setDateISO] = useState<string | undefined>(
+    initial?.repeat?.type==='oneoff' ? initial.repeat.dateISO : undefined
+  );
+
+  // NUEVO estado de campos
+  const [contextText, setContextText] = useState(initial?.note ?? '');
+  const [contextId, setContextId] = useState<string | undefined>(initial?.contextId);
+  const [voiceId, setVoiceId] = useState<string | undefined>(initial?.voiceId);
+  const [durationMin, setDurationMin] = useState<number>(initial?.durationMin ?? 10);
+
+  const [showContextList, setShowContextList] = useState(false);
+  const [showVoiceList, setShowVoiceList] = useState(false);
 
   function toggleDay(d: Weekday) {
     setDays(prev => prev.includes(d) ? prev.filter(x=>x!==d) : [...prev, d].sort());
@@ -30,13 +44,24 @@ export default function ScheduleSheet({ initial, onClose, onSave }: Props) {
   function save() {
     const payload: Omit<ScheduledCall,'id'> = {
       timeISO: time.toISOString(),
-      repeat: tab==='weekly' ? { type: 'weekly', days } : { type: 'oneoff', dateISO: dateISO! },
-      note,
+      repeat: tab==='weekly'
+        ? { type: 'weekly', days }
+        : { type: 'oneoff', dateISO: dateISO! },
+      note: contextText,
+      contextId,
+      durationMin,
+      voiceId,
       active: true,
     };
     onSave(payload);
     ref.current?.close();
   }
+
+  const voiceLabel = voiceId
+    ? VOICE_OPTIONS.find(v => v.id === voiceId)?.label
+    : undefined;
+
+  const canSave = tab === 'weekly' ? days.length > 0 : !!dateISO;
 
   return (
     <BottomSheet ref={ref} index={1} snapPoints={snapPoints} enablePanDownToClose onClose={onClose}>
@@ -51,16 +76,21 @@ export default function ScheduleSheet({ initial, onClose, onSave }: Props) {
           </Pressable>
         </View>
 
-        {/* selector de hora (rueda) */}
+        {/* selector de hora (centro) */}
         <View style={styles.pickerWrap}>
           <DatePicker date={time} onDateChange={setTime} mode="time" />
         </View>
 
+        {/* patrón de repetición */}
         {tab==='weekly' ? (
           <View style={{marginTop: spacing.md, flexDirection:'row', justifyContent:'space-between'}}>
-            {([1,2,3,4,5,6,0] as Weekday[]).map((d)=>( 
-              <DayPill key={d} label={['D','L','M','X','J','V','S'][d]}
-                selected={days.includes(d)} onToggle={()=>toggleDay(d)} />
+            {([1,2,3,4,5,6,0] as Weekday[]).map((d)=>( // L M X J V S D
+              <DayPill
+                key={d}
+                label={['D','L','M','X','J','V','S'][d]}
+                selected={days.includes(d)}
+                onToggle={()=>toggleDay(d)}
+              />
             ))}
           </View>
         ) : (
@@ -72,21 +102,140 @@ export default function ScheduleSheet({ initial, onClose, onSave }: Props) {
           />
         )}
 
+        {/* ---- CAMPOS NUEVOS ---- */}
+
+        {/* Contexto (texto + sugerencias) */}
+        <Text style={styles.fieldLabel}>Contexto</Text>
+        <View style={styles.contextRow}>
+          <TextInput
+            value={contextText}
+            onChangeText={(t)=>{ setContextText(t); setContextId(undefined); }}
+            placeholder="Escriba o seleccione el contexto para esta llamada"
+            placeholderTextColor="#9CA3AF"
+            style={styles.textarea}
+            multiline
+          />
+          <Pressable onPress={() => setShowContextList((v)=>!v)} style={styles.dropdownBtn}>
+            <Ionicons name="chevron-down" size={18} color={colors.text} />
+          </Pressable>
+        </View>
+        {showContextList && (
+          <View style={styles.dropdown}>
+            {CONTEXT_PRESETS.map(p => (
+              <Pressable
+                key={p.id}
+                onPress={() => { setContextId(p.id); setContextText(p.label); setShowContextList(false); }}
+                style={styles.dropdownItem}
+              >
+                <Text style={styles.dropdownText}>{p.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+
+        {/* Voz replicada */}
+        <Text style={styles.fieldLabel}>Voz replicada</Text>
+        <Pressable style={styles.selectRow} onPress={() => setShowVoiceList(v=>!v)}>
+          <Text style={voiceLabel ? styles.selectTextValue : styles.selectPlaceholder}>
+            {voiceLabel ?? 'Seleccione una voz replicada a usar'}
+          </Text>
+          <Ionicons name="chevron-down" size={18} color={colors.text} />
+        </Pressable>
+        {showVoiceList && (
+          <View style={styles.dropdown}>
+            {VOICE_OPTIONS.map(v => (
+              <Pressable
+                key={v.id}
+                onPress={() => { setVoiceId(v.id); setShowVoiceList(false); }}
+                style={styles.dropdownItem}
+              >
+                <Text style={styles.dropdownText}>{v.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+
+        {/* Duración aproximada */}
+        <Text style={styles.fieldLabel}>Duración aproximada</Text>
+        <View style={styles.chipsRow}>
+          {DURATION_OPTIONS.map(m => {
+            const on = durationMin === m;
+            return (
+              <Pressable key={m} onPress={()=>setDurationMin(m)} style={[styles.chip, on && styles.chipOn]}>
+                <Text style={[styles.chipText, on && styles.chipTextOn]}>{m} min</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
         {/* Botonera */}
         <View style={styles.actions}>
           <Pressable onPress={onClose}><Text style={{color:'#b91c1c', fontWeight:'700'}}>Cancelar</Text></Pressable>
-          <Pressable onPress={save}><Text style={{color: colors.primary, fontWeight:'700'}}>Guardar</Text></Pressable>
+          <Pressable disabled={!canSave} onPress={save}>
+            <Text style={{color: canSave ? colors.primary : '#9CA3AF', fontWeight:'700'}}>Guardar</Text>
+          </Pressable>
         </View>
       </BottomSheetView>
     </BottomSheet>
   );
 }
+
 const styles = StyleSheet.create({
   content: { paddingHorizontal: spacing.xl, paddingTop: spacing.md },
   tabs: { flexDirection:'row', backgroundColor:'#f5d8ff', borderRadius:999, padding:4, alignSelf:'center', marginBottom: spacing.md },
   tab: { paddingVertical:6, paddingHorizontal:12, borderRadius:999 },
   tabOn: { backgroundColor: colors.primary },
   tabText: { color:'#fff', fontWeight:'700' },
+
   pickerWrap: { alignItems: 'center', marginVertical: spacing.md },
+
+  fieldLabel: { marginTop: spacing.lg, marginBottom: spacing.sm, fontWeight:'700', color: colors.text },
+  contextRow: { position:'relative' },
+  textarea: {
+    minHeight: 68,
+    borderRadius: 12,
+    backgroundColor: '#fff',
+    padding: spacing.md,
+    paddingRight: spacing.xl + 8,
+    textAlignVertical: 'top',
+    color: colors.text,
+  },
+  dropdownBtn: {
+    position: 'absolute', right: 8, top: 8,
+    width: 32, height: 32, borderRadius: 16,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#F3F4F6',
+  },
+  selectRow: {
+    borderRadius: 12,
+    backgroundColor: '#fff',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  selectPlaceholder: { color: '#9CA3AF' },
+  selectTextValue: { color: colors.text, fontWeight:'600' },
+
+  dropdown: {
+    marginTop: 6,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    overflow: 'hidden',
+    elevation: 3,
+  },
+  dropdownItem: { paddingVertical: spacing.md, paddingHorizontal: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#eee' },
+  dropdownText: { color: colors.text },
+
+  chipsRow: { flexDirection:'row', flexWrap:'wrap', gap: 8 },
+  chip: {
+    paddingVertical: 8, paddingHorizontal: 12,
+    borderRadius: 999, backgroundColor: '#F3F4F6',
+  },
+  chipOn: { backgroundColor: colors.primary },
+  chipText: { color: '#4B5563', fontWeight:'600' },
+  chipTextOn: { color: '#fff' },
+
   actions: { marginTop: spacing.xl, flexDirection:'row', justifyContent:'space-between' },
 });

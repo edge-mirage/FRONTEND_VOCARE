@@ -7,6 +7,7 @@ import LlamadaInstantaneaScreen from '@/screens/Llamadas/LlamadaInstantaneaScree
 import LlamadaRapidaScreen from '@/screens/Llamadas/LlamadaRapidaScreen';
 import AgendarLlamadasScreen from '@/screens/Llamadas/AgendarLlamadasScreen';
 import ContextosScreen from '@/screens/Llamadas/ContextosScreen';
+import LlamadaEditorScreen from '@/screens/Llamadas/LlamadaEditorScreen.tsx';
 
 const Stack = createNativeStackNavigator<LlamadaStackParamList>();
 
@@ -17,6 +18,7 @@ export default function LlamadaStack() {
       <Stack.Screen name="LlamadaInstantanea" component={LlamadaInstantaneaScreen} />
       <Stack.Screen name="LlamadaRapida" component={LlamadaRapidaScreen} />
       <Stack.Screen name="AgendarLlamada" component={AgendarLlamadasScreen} />
+      <Stack.Screen name="LlamadaEditor" component={LlamadaEditorScreen} />
       <Stack.Screen name="ContextosDeLlamada" component={ContextosScreen} />
     </Stack.Navigator>
   );
