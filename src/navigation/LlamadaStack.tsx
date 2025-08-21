@@ -4,6 +4,7 @@ import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {LlamadaStackParamList} from './types';
 import LlamadasHomeScreen from '@/screens/Llamadas/LlamadasHomeScreen';
 import LlamadaInstantaneaScreen from '@/screens/Llamadas/LlamadaInstantaneaScreen';
+import LlamadaActivaScreen from '@/screens/Llamadas/LlamadaActivaScreen';
 import LlamadaRapidaScreen from '@/screens/Llamadas/LlamadaRapidaScreen';
 import AgendarLlamadasScreen from '@/screens/Llamadas/AgendarLlamadasScreen';
 import ContextosScreen from '@/screens/Llamadas/ContextosScreen';
@@ -15,6 +16,7 @@ export default function LlamadaStack() {
     <Stack.Navigator screenOptions={{headerShown: false}}>
       <Stack.Screen name="LlamadaHome" component={LlamadasHomeScreen} />
       <Stack.Screen name="LlamadaInstantanea" component={LlamadaInstantaneaScreen} />
+      <Stack.Screen name="LlamadaActiva" component={LlamadaActivaScreen} />
       <Stack.Screen name="LlamadaRapida" component={LlamadaRapidaScreen} />
       <Stack.Screen name="AgendarLlamada" component={AgendarLlamadasScreen} />
       <Stack.Screen name="ContextosDeLlamada" component={ContextosScreen} />
