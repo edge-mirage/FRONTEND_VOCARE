@@ -19,7 +19,7 @@ function fmt(sec: number) {
 export default function LlamadaActivaScreen() {
   const navigation = useNavigation<Nav>();
   const { params } = useRoute<Rt>();
-  const number = params?.number ?? '+ 56 9 7534 7402';
+  const who = params?.voiceName ?? 'Voz replicada'; // ← nombre mostrado
 
   const [seconds, setSeconds] = useState(0);
   const [speaker, setSpeaker] = useState(false);
@@ -27,9 +27,7 @@ export default function LlamadaActivaScreen() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const resetToCallsHomeAndExit = () => {
-    navigation.dispatch(
-      CommonActions.reset({ index: 0, routes: [{ name: 'LlamadaHome' }] })
-    );
+    navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'LlamadaHome' }] }));
     navigation.getParent()?.navigate('LlamadasTab');
     if (Platform.OS === 'android') setTimeout(() => BackHandler.exitApp(), 30);
   };
@@ -49,7 +47,7 @@ export default function LlamadaActivaScreen() {
   return (
     <View style={styles.container}>
       <View style={{ alignItems: 'center', marginTop: spacing.lg }}>
-        <Text style={styles.number}>{number}</Text>
+        <Text style={styles.number}>{who}</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6 }}>
           <Ionicons name="lock-closed-outline" size={14} color={colors.textMuted} />
           <Text style={styles.subtitle}>  Cifrado de extremo a extremo</Text>

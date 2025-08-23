@@ -8,7 +8,6 @@ import { colors, spacing } from '@/theme';
 import type { LlamadaStackParamList } from '@/navigation/types';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-
 type Nav = NativeStackNavigationProp<LlamadaStackParamList, 'LlamadaInstantanea'>;
 type Rt  = RouteProp<LlamadaStackParamList, 'LlamadaInstantanea'>;
 
@@ -16,32 +15,21 @@ export default function LlamadaInstantaneaScreen() {
   const navigation = useNavigation<Nav>();
   const { params } = useRoute<Rt>();
   const insets = useSafeAreaInsets();
-  const number = params?.number ?? '+ 56 9 7534 7402';
+  const who = params?.voiceName ?? 'Voz replicada';  // ← nombre mostrado
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const resetToCallsHomeAndExit = () => {
-    // 1) resetea el stack de Llamadas a su pantalla inicial
-    navigation.dispatch(
-      CommonActions.reset({ index: 0, routes: [{ name: 'LlamadaHome' }] })
-    );
-    // 2) asegura que estemos en la pestaña Llamadas
+    navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'LlamadaHome' }] }));
     navigation.getParent()?.navigate('LlamadasTab');
-
-    // 3) cierra la app en Android (en iOS no está permitido)
-    if (Platform.OS === 'android') {
-      setTimeout(() => BackHandler.exitApp(), 30); // da tiempo a aplicar el reset
-    }
+    if (Platform.OS === 'android') setTimeout(() => BackHandler.exitApp(), 30);
   };
 
   useEffect(() => {
-    // autocortar a los 20s
     timerRef.current = setTimeout(resetToCallsHomeAndExit, 20_000);
-
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       resetToCallsHomeAndExit();
       return true;
     });
-
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
       sub.remove();
@@ -50,7 +38,7 @@ export default function LlamadaInstantaneaScreen() {
 
   const answer = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
-    navigation.replace('LlamadaActiva', { number });
+    navigation.replace('LlamadaActiva', { voiceName: who }); // ← pasa la voz a la siguiente
   };
 
   const decline = () => resetToCallsHomeAndExit();
@@ -58,7 +46,7 @@ export default function LlamadaInstantaneaScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Llamada entrante</Text>
-      <Text style={styles.number}>{number}</Text>
+      <Text style={styles.number}>{who}</Text>
 
       <View style={{ height: 28 }} />
 
@@ -68,12 +56,7 @@ export default function LlamadaInstantaneaScreen() {
 
       <View style={{ flex: 1 }} />
 
-      <View
-        style={[
-          styles.actions,
-          { bottom: insets.bottom + 80 },
-        ]}
-      >
+      <View style={[styles.actions, { bottom: insets.bottom + 80 }]}>
         <Pressable style={[styles.roundBtn, styles.decline]} onPress={decline}>
           <Ionicons name="call" size={24} color="#fff" style={{ transform: [{ rotate: '135deg' }] }} />
         </Pressable>
@@ -95,13 +78,8 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   actions: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    // bottom se setea en runtime con el safe-area
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
+    position: 'absolute', left: 0, right: 0,
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
     gap: spacing.xl,
   },
   roundBtn: {
