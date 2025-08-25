@@ -36,6 +36,7 @@ export type ReplicacionStackParamList = {
 
 export type MainTabParamList = {
   PacienteTab: undefined;
+  HomeTab: undefined;
   LlamadasTab: undefined;
   GrupoTab: undefined;
   ReplicacionTab: undefined;
