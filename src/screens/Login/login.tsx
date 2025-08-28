@@ -23,13 +23,21 @@ export default function LoginScreen() {
   const { checkAuthState } = useAuth();
 
   const handleLogin = async () => {
+    console.log('🚀 Iniciando login con:', { email, password: '***' });
     setLoading(true);
     setError('');
     try {
+      console.log('📡 Llamando a API de login...');
       const user = await login({ email, password });
+      console.log('✅ Login exitoso, usuario:', user);
+      
       // Actualizar el contexto de autenticación
+      console.log('🔄 Actualizando estado de auth...');
       await checkAuthState();
+      console.log('✅ Estado de auth actualizado');
     } catch (e: any) {
+      console.error('❌ Error en login:', e);
+      console.error('❌ Error details:', e.response?.data || e.message);
       setError('Credenciales incorrectas o error de conexión');
     } finally {
       setLoading(false);

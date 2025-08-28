@@ -2,7 +2,7 @@
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const useLocalServer = true;
+const useLocalServer = false; // Temporal: usar mock para testing
 const LOCAL_URL = 'http://10.0.2.2:8000'; 
 const PROD_URL = 'https://tu-servidor.com';
 export const BASE_URL = useLocalServer ? LOCAL_URL : PROD_URL;
@@ -131,11 +131,83 @@ export async function getUser(): Promise<AuthUser | null> {
 
 // ===== Endpoints Auth =====
 export async function login(body: LoginBody): Promise<AuthUser> {
-  const { data } = await axios.post<TokenPairResponse>(`${BASE_URL}/auth/login`, body, {
-    headers: { 'Content-Type': 'application/json' },
-  });
-  await saveSession(data);
-  return data.user;
+  console.log('🌐 LOGIN: Enviando request a:', `${BASE_URL}/auth/login`);
+  console.log('📤 LOGIN: Body:', { email: body.email, password: '***' });
+  
+  // MOCK para testing - remover cuando el servidor esté funcionando
+  if (!useLocalServer) {
+    console.log('🎭 MOCK: Usando datos de prueba');
+    await new Promise<void>(resolve => setTimeout(resolve, 1000)); // Simular delay de red
+    
+    const mockUser: AuthUser = {
+      id: 1,
+      email: body.email,
+      name: "Usuario Prueba",
+      middle_name: "De",
+      last_name: "Test",
+      dob: "1990-01-01",
+      group_uuid: "4adc944e-ea13-4752-a0a0-dccd65f1635e",
+      voice_id: "voice_001",
+      email_verified: true,
+      created_at: new Date().toISOString()
+    };
+    
+    const mockTokens: TokenPairResponse = {
+      access_token: "mock_access_token_123",
+      refresh_token: "mock_refresh_token_456", 
+      token_type: "bearer",
+      user: mockUser
+    };
+    
+    await saveSession(mockTokens);
+    console.log('💾 MOCK: Sesión mock guardada');
+    return mockUser;
+  }
+  
+  try {
+    // Intentar diferentes rutas posibles
+    console.log('🔄 Intentando login con ruta principal...');
+    let loginUrl = `${BASE_URL}/auth/login`;
+    
+    const { data } = await axios.post<TokenPairResponse>(loginUrl, body, {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 10000, // 10 segundos timeout
+    });
+    
+    console.log('✅ LOGIN: Response received:', { user: data.user, hasTokens: !!(data.access_token && data.refresh_token) });
+    await saveSession(data);
+    console.log('💾 LOGIN: Sesión guardada');
+    return data.user;
+  } catch (error) {
+    console.error('❌ LOGIN: Error completo:', error);
+    if (axios.isAxiosError(error)) {
+      console.error('❌ LOGIN: Status:', error.response?.status);
+      console.error('❌ LOGIN: Data:', error.response?.data);
+      console.error('❌ LOGIN: URL intentada:', error.config?.url);
+      
+      // Si es 404, intentar con rutas alternativas
+      if (error.response?.status === 404) {
+        console.log('🔄 Intentando rutas alternativas...');
+        const alternativeRoutes = ['/login', '/api/auth/login', '/users/login'];
+        
+        for (const route of alternativeRoutes) {
+          try {
+            console.log(`🔄 Intentando: ${BASE_URL}${route}`);
+            const { data } = await axios.post<TokenPairResponse>(`${BASE_URL}${route}`, body, {
+              headers: { 'Content-Type': 'application/json' },
+              timeout: 10000,
+            });
+            console.log(`✅ LOGIN exitoso con ruta: ${route}`);
+            await saveSession(data);
+            return data.user;
+          } catch (altError) {
+            console.log(`❌ Falló ruta ${route}:`, axios.isAxiosError(altError) ? altError.response?.status : altError);
+          }
+        }
+      }
+    }
+    throw error;
+  }
 }
 
 export async function me(): Promise<AuthUser> {

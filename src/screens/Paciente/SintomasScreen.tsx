@@ -7,14 +7,13 @@ import Header from '@/components/Header';
 import { colors, spacing } from '@/theme';
 import { PlainItem } from '@/components/plain';
 import { getPacientById, addSymptom, updateSymptom, deleteSymptom } from '@/crud/pacient';
+import { StorageService } from '@/services/StorageService';
 
 type Sintoma = {
   id: string;
   nombre: string;
   descripcion?: string;
 };
-
-const pacient_id = 1;
 
 export default function SintomasScreen() {
   const [items, setItems] = useState<Sintoma[]>([]);
@@ -25,16 +24,28 @@ export default function SintomasScreen() {
   const [editingItem, setEditingItem] = useState<Sintoma | null>(null);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<Sintoma | null>(null);
+  const [pacientId, setPacientId] = useState<number | null>(null);
+
+  // Cargar pacient_id desde storage al inicializar
+  useEffect(() => {
+    const loadPacientId = async () => {
+      const id = await StorageService.getPacientId();
+      setPacientId(id);
+    };
+    loadPacientId();
+  }, []);
 
   const fetchSintomas = useCallback(async () => {
+    if (!pacientId) return;
+    
     setLoading(true);
     try {
-      const resp = await getPacientById(pacient_id);
+      const resp = await getPacientById(pacientId);
       const raw = resp.data.symptoms || [];
       const mapped = raw.map((it: any, idx: number) => ({
         id: idx.toString(),
         nombre: it.name || 'Síntoma',
-        descripcion: it.descripcion || '',
+        descripcion: it.description || '',
       }));
       setItems(mapped);
     } catch (err) {
@@ -42,24 +53,26 @@ export default function SintomasScreen() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [pacientId]);
 
   const handleCreateSintoma = async () => {
+    if (!pacientId) return;
+    
     try {
       if (editingItem) {
         // Update existing item
         const sintomaData = {
           name: draftNombre,
-          descripcion: draftDescripcion,
+          description: draftDescripcion,
         };
-        await updateSymptom(pacient_id, parseInt(editingItem.id), sintomaData);
+        await updateSymptom(pacientId, parseInt(editingItem.id), sintomaData);
       } else {
         // Create new item
         const sintomaData = {
           name: draftNombre,
-          descripcion: draftDescripcion,
+          description: draftDescripcion,
         };
-        await addSymptom(pacient_id, sintomaData);
+        await addSymptom(pacientId, sintomaData);
       }
 
       resetModal();
@@ -82,9 +95,11 @@ export default function SintomasScreen() {
   };
 
   const confirmDeleteSintoma = async () => {
+    if (!pacientId) return;
+    
     try {
       if (itemToDelete) {
-        await deleteSymptom(pacient_id, parseInt(itemToDelete.id));
+        await deleteSymptom(pacientId, parseInt(itemToDelete.id));
         setDeleteModalVisible(false);
         setItemToDelete(null);
         fetchSintomas();
@@ -106,7 +121,11 @@ export default function SintomasScreen() {
     setEditingItem(null);
   };
 
-  useEffect(() => { fetchSintomas(); }, [fetchSintomas]);
+  useEffect(() => { 
+    if (pacientId) {
+      fetchSintomas();
+    }
+  }, [fetchSintomas, pacientId]);
 
   return (
     <View style={styles.container}>

@@ -7,47 +7,13 @@ import Header from '@/components/Header';
 import { colors, spacing } from '@/theme';
 import { PlainItem } from '@/components/plain';
 import { getPacientById, addInterest, updateInterest, deleteInterest} from '@/crud/pacient';
-
+import { StorageService } from '@/services/StorageService';
 
 type Interes = {
   id: string;
   nombre: string;
   descripcion?: string;
 };
-
-/*{
-    "id": 1,
-    "name": "Ana Gómez",
-    "age": 30,
-    "symptoms": [
-        {
-            "name": "tos"
-        }
-    ],
-    "events": [
-        {
-            "date": "2025-07-28",
-            "type": "consulta"
-        }
-    ],
-    "interests": [
-        {
-            "nombre": "lectura",
-            "descripcion": "le gusta mucho leer 50 sommbras de grey"
-        }
-    ],
-    "grupo_uuid": "4adc944e-ea13-4752-a0a0-dccd65f1635e"
-} */
-
-// MOCK inicial (luego cambias por la data del backend)
-const MOCK: Interes[] = [
-  { id: '1', nombre: 'Interés 1', descripcion: 'Descripcion 1' },
-  { id: '2', nombre: 'Interés 2', descripcion: 'Descripcion 2' },
-  { id: '3', nombre: 'Interés 3', descripcion: 'Descripcion 3' },
-  { id: '4', nombre: 'Interés 4', descripcion: 'Descripcion 4' },
-];
-
-const pacient_id = 1;
 
 export default function InteresesScreen() {
   const [items, setItems] = useState<Interes[]>([]);
@@ -58,33 +24,47 @@ export default function InteresesScreen() {
   const [editingItem, setEditingItem] = useState<Interes | null>(null);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<Interes | null>(null);
+  const [pacientId, setPacientId] = useState<number | null>(null);
+
+  // Cargar pacient_id desde storage al inicializar
+  useEffect(() => {
+    const loadPacientId = async () => {
+      const id = await StorageService.getPacientId();
+      setPacientId(id);
+    };
+    loadPacientId();
+  }, []);
 
   // Simula carga desde API
   const fetchIntereses = useCallback(async () => {
-  try {
-    setLoading(true);
-    const resp = await getPacientById(pacient_id);
-    console.log('Respuesta API:', resp);
+    if (!pacientId) return;
     
-    const rawInterests = resp.data.interests || [];
+    try {
+      setLoading(true);
+      const resp = await getPacientById(pacientId);
+      console.log('Respuesta API:', resp);
+      
+      const rawInterests = resp.data.interests || [];
 
-    const mapped = rawInterests.map((it: any, index: number) => ({
-      id: index.toString(),
-      nombre: it.nombre,
-      descripcion: it.descripcion || '',
-    }));
+      const mapped = rawInterests.map((it: any, index: number) => ({
+        id: index.toString(),
+        nombre: it.nombre,
+        descripcion: it.descripcion || '',
+      }));
 
-    setItems(mapped);
-    console.log('Intereses mapeados:', mapped);
-  } catch (err) {
-    console.error('Error al obtener intereses:', err);
+      setItems(mapped);
+      console.log('Intereses mapeados:', mapped);
+    } catch (err) {
+      console.error('Error al obtener intereses:', err);
   } finally {
     setLoading(false);
   }
-}, []);
+}, [pacientId]);
 
 
   const handleCreateInteres = async () => {
+    if (!pacientId) return;
+    
     try {
       if (editingItem) {
         // Update existing item - the API expects a string or object, let's use object format
@@ -92,14 +72,14 @@ export default function InteresesScreen() {
           nombre: draftNombre,
           descripcion: draftDescripcion,
         };
-        await updateInterest(pacient_id, parseInt(editingItem.id), JSON.stringify(interestObj));
+        await updateInterest(pacientId, parseInt(editingItem.id), JSON.stringify(interestObj));
       } else {
         // Create new item
         const interestObj = {
           nombre: draftNombre,
           descripcion: draftDescripcion,
         };
-        await addInterest(pacient_id, interestObj);
+        await addInterest(pacientId, interestObj);
       }
 
       resetModal();
@@ -122,9 +102,11 @@ export default function InteresesScreen() {
   };
 
   const confirmDeleteInteres = async () => {
+    if (!pacientId) return;
+    
     try {
       if (itemToDelete) {
-        await deleteInterest(pacient_id, parseInt(itemToDelete.id));
+        await deleteInterest(pacientId, parseInt(itemToDelete.id));
         setDeleteModalVisible(false);
         setItemToDelete(null);
         fetchIntereses();
@@ -148,7 +130,11 @@ export default function InteresesScreen() {
 
 
 
-  useEffect(() => { fetchIntereses(); }, [fetchIntereses]);
+  useEffect(() => { 
+    if (pacientId) {
+      fetchIntereses();
+    }
+  }, [fetchIntereses, pacientId]);
 
   return (
     <View style={styles.container}>

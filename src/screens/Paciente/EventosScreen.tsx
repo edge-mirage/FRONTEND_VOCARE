@@ -7,14 +7,13 @@ import Header from '@/components/Header';
 import { colors, spacing } from '@/theme';
 import { PlainItem } from '@/components/plain';
 import { getPacientById, addEvent, updateEvent, deleteEvent } from '@/crud/pacient';
+import { StorageService } from '@/services/StorageService';
 
 type Evento = {
   id: string;
   tipo: string;
   fecha?: string;
 };
-
-const pacient_id = 1;
 
 export default function EventosScreen() {
   const [items, setItems] = useState<Evento[]>([]);
@@ -25,11 +24,23 @@ export default function EventosScreen() {
   const [editingItem, setEditingItem] = useState<Evento | null>(null);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<Evento | null>(null);
+  const [pacientId, setPacientId] = useState<number | null>(null);
+
+  // Cargar pacient_id desde storage al inicializar
+  useEffect(() => {
+    const loadPacientId = async () => {
+      const id = await StorageService.getPacientId();
+      setPacientId(id);
+    };
+    loadPacientId();
+  }, []);
 
   const fetchEventos = useCallback(async () => {
+    if (!pacientId) return;
+    
     setLoading(true);
     try {
-      const resp = await getPacientById(pacient_id);
+      const resp = await getPacientById(pacientId);
       const raw = resp.data.events || [];
       const mapped = raw.map((it: any, idx: number) => ({
         id: idx.toString(),
@@ -42,9 +53,11 @@ export default function EventosScreen() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [pacientId]);
 
   const handleCreateEvento = async () => {
+    if (!pacientId) return;
+    
     try {
       if (editingItem) {
         // Update existing item
@@ -52,14 +65,14 @@ export default function EventosScreen() {
           type: draftTipo,
           date: draftFecha,
         };
-        await updateEvent(pacient_id, parseInt(editingItem.id), eventoData);
+        await updateEvent(pacientId, parseInt(editingItem.id), eventoData);
       } else {
         // Create new item
         const eventoData = {
           type: draftTipo,
           date: draftFecha,
         };
-        await addEvent(pacient_id, eventoData);
+        await addEvent(pacientId, eventoData);
       }
 
       resetModal();
@@ -82,9 +95,11 @@ export default function EventosScreen() {
   };
 
   const confirmDeleteEvento = async () => {
+    if (!pacientId) return;
+    
     try {
       if (itemToDelete) {
-        await deleteEvent(pacient_id, parseInt(itemToDelete.id));
+        await deleteEvent(pacientId, parseInt(itemToDelete.id));
         setDeleteModalVisible(false);
         setItemToDelete(null);
         fetchEventos();
@@ -106,7 +121,11 @@ export default function EventosScreen() {
     setEditingItem(null);
   };
 
-  useEffect(() => { fetchEventos(); }, [fetchEventos]);
+  useEffect(() => { 
+    if (pacientId) {
+      fetchEventos();
+    }
+  }, [fetchEventos, pacientId]);
 
   return (
     <View style={styles.container}>

@@ -7,6 +7,7 @@ import { Ionicons } from '@react-native-vector-icons/ionicons';
 import Header from '@/components/Header';
 import { colors, spacing } from '@/theme';
 import { obtenerContextoPorGrupo, crearContextItem, actualizarContextItem, eliminarContextItem } from '@/crud/family';
+import { StorageService } from '@/services/StorageService';
 
 interface ContextItem {
   id: number;
@@ -15,7 +16,6 @@ interface ContextItem {
 }
 
 export default function ContextosScreen() {
-  const grupo_uuid: string = '4adc944e-ea13-4752-a0a0-dccd65f1635e';
   const [items, setItems] = useState<ContextItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
@@ -25,11 +25,23 @@ export default function ContextosScreen() {
   const [editingItem, setEditingItem] = useState<ContextItem | null>(null);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<ContextItem | null>(null);
+  const [grupoUuid, setGrupoUuid] = useState<string | null>(null);
+
+  // Cargar grupo_uuid desde storage al inicializar
+  useEffect(() => {
+    const loadGrupoUuid = async () => {
+      const uuid = await StorageService.getGroupUuid();
+      setGrupoUuid(uuid);
+    };
+    loadGrupoUuid();
+  }, []);
 
   const fetchContextos = useCallback(async () => {
+    if (!grupoUuid) return;
+    
     try {
       setLoading(true);
-      const contexto = await obtenerContextoPorGrupo(grupo_uuid);
+      const contexto = await obtenerContextoPorGrupo(grupoUuid);
       setItems(contexto.items || []);
       setContextId(contexto.id || null); // Store the context_id for creating new items
     } catch (error) {
@@ -37,7 +49,7 @@ export default function ContextosScreen() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [grupoUuid]);
 
   const handleCreateContext = async () => {
     try {
@@ -113,7 +125,11 @@ export default function ContextosScreen() {
     setEditingItem(null);
   };
 
-  useEffect(() => { fetchContextos(); }, [fetchContextos]);
+  useEffect(() => { 
+    if (grupoUuid) {
+      fetchContextos();
+    }
+  }, [fetchContextos, grupoUuid]);
 
   return (
     <View style={styles.container}>
