@@ -9,6 +9,8 @@ import ReplicacionScreen from '@/screens/Replicaciones/ReplicacionScreen'; // <-
 import VocesRegistradasScreen from '@/screens/Replicaciones/VocesRegistradasScreen';
 import ReconocimientoVozScreen from '@/screens/Replicaciones/ReconocimientoVozScreen';
 import FoneticaPalabrasScreen from '@/screens/Replicaciones/FoneticaPalabrasScreen';
+import ReplicacionScreenSure from '@/screens/Replicaciones/ReplicacionScreenSure';
+
 
 
 const Stack = createNativeStackNavigator<ReplicacionStackParamList>();
@@ -25,6 +27,17 @@ export default function ReplicacionStack() {
       <Stack.Screen name="VocesRegistradas" component={VocesRegistradasScreen} />
       <Stack.Screen name="ReconocimientoVoz" component={ReconocimientoVozScreen} />
       <Stack.Screen name="FoneticaPalabras" component={FoneticaPalabrasScreen} />
+
+      <Stack.Screen
+        name="ReplicacionScreenSure"
+        component={ReplicacionScreenSure}
+        options={{
+          headerShown: false,
+          presentation: 'transparentModal',   // nativo
+          animation: 'fade',
+          contentStyle: { backgroundColor: 'rgba(0,0,0,0.45)' },
+        }}
+      />
 
 
     </Stack.Navigator>
