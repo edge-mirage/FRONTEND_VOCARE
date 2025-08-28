@@ -3,26 +3,29 @@ import { View, Text, StyleSheet, FlatList, Pressable, Alert } from 'react-native
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { colors, spacing } from '@/theme';
-import ScheduleCard from '@/components/ScheduleCard';
-import ScheduleSheet from '@/components/ScheduleSheet';
+import ScheduleCard from '@/components/schedule/ScheduleCard';
+import ScheduleSheet from '@/components/schedule/ScheduleSheet';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSheet } from '@/hooks/useSheet';
-import { LlamadaAgendada } from '@/models/agendar_llamada';
+import { ScheduledCall } from '@/domain/schedule/types';
 import { getAuthToken } from '@/services/auth';
 
-const API_BASE_URL = 'http://192.168.1.5:8000/agendar-llamadas';
+const API_BASE_URL = 'http://192.168.1.5:8000/agendar-llamadas'; 
 
 export default function AgendarLlamadasScreen() {
   const navigation = useNavigation();
   const { isVisible, openSheet, closeSheet } = useSheet();
-  const [scheduledCalls, setScheduledCalls] = useState<LlamadaAgendada[]>([]);
+  const [scheduledCalls, setScheduledCalls] = useState<ScheduledCall[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedCall, setSelectedCall] = useState<LlamadaAgendada | null>(null);
+  const [selectedCall, setSelectedCall] = useState<ScheduledCall | null>(null);
 
   const fetchScheduledCalls = async () => {
     try {
       setLoading(true);
       const token = await getAuthToken();
+      if (!token) {
+        throw new Error('No se encontró el token de autenticación');
+      }
       const response = await fetch(API_BASE_URL, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -30,12 +33,15 @@ export default function AgendarLlamadasScreen() {
         }
       });
       
-      if (!response.ok) throw new Error('Error al cargar llamadas');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Error al cargar llamadas');
+      }
       const data = await response.json();
       setScheduledCalls(data);
     } catch (error) {
-      console.error(error);
-      Alert.alert('Error', 'No se pudieron cargar las llamadas agendadas');
+      console.error('Error fetching scheduled calls:', error);
+      Alert.alert('Error', `No se pudieron cargar las llamadas: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -45,9 +51,22 @@ export default function AgendarLlamadasScreen() {
     fetchScheduledCalls();
   }, []);
 
+  const handleOpenEditSheet = (call: ScheduledCall) => {
+    setSelectedCall(call);
+    openSheet();
+  };
+
+  const handleCloseSheet = () => {
+    setSelectedCall(null);
+    closeSheet();
+  };
+
   const handleSave = async (payload: any) => {
     try {
       const token = await getAuthToken();
+      if (!token) {
+        throw new Error('No se encontró el token de autenticación');
+      }
       const headers = {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
@@ -73,109 +92,97 @@ export default function AgendarLlamadasScreen() {
         throw new Error(errorData.detail || 'Error en la solicitud');
       }
 
-      fetchScheduledCalls();
-      closeSheet();
+      await fetchScheduledCalls();
+      handleCloseSheet();
     } catch (error) {
       console.error('Error al guardar la llamada:', error);
       Alert.alert('Error', `No se pudo guardar la llamada: ${error.message}`);
     }
   };
 
+  const handleDelete = async (callId: string) => {
+    try {
+      const token = await getAuthToken();
+      if (!token) {
+        throw new Error('No se encontró el token de autenticación');
+      }
+      const headers = {
+        'Authorization': `Bearer ${token}`,
+      };
+      const response = await fetch(`${API_BASE_URL}/${callId}`, {
+        method: 'DELETE',
+        headers: headers,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Error al eliminar');
+      }
+
+      await fetchScheduledCalls();
+    } catch (error) {
+      console.error('Error al eliminar la llamada:', error);
+      Alert.alert('Error', `No se pudo eliminar la llamada: ${error.message}`);
+    }
+  };
+
   const handleToggle = async (callId: string, isActive: boolean) => {
     try {
       const token = await getAuthToken();
-      const response = await fetch(`${API_BASE_URL}/${callId}/toggle`, {
+      if (!token) {
+        throw new Error('No se encontró el token de autenticación');
+      }
+      const headers = {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      };
+      const response = await fetch(`${API_BASE_URL}/${callId}/toggle?activo=${isActive}`, {
         method: 'PUT',
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json' 
-        },
-        body: JSON.stringify({ activo: isActive }),
+        headers: headers,
       });
-      
-      if (!response.ok) throw new Error('Error al cambiar estado');
-      fetchScheduledCalls();
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Error al alternar estado');
+      }
+
+      await fetchScheduledCalls();
     } catch (error) {
-      console.error(error);
-      Alert.alert('Error', 'No se pudo cambiar el estado de la llamada');
+      console.error('Error al alternar el estado:', error);
+      Alert.alert('Error', `No se pudo alternar el estado: ${error.message}`);
     }
   };
 
-  const handleDelete = async (callId: string) => {
-    try {
-      Alert.alert(
-        'Confirmar eliminación',
-        '¿Estás seguro de que quieres eliminar esta llamada agendada?',
-        [
-          { text: 'Cancelar', style: 'cancel' },
-          {
-            text: 'Eliminar',
-            style: 'destructive',
-            onPress: async () => {
-              const token = await getAuthToken();
-              const response = await fetch(`${API_BASE_URL}/${callId}`, {
-                method: 'DELETE',
-                headers: { 
-                  'Authorization': `Bearer ${token}`,
-                },
-              });
-              
-              if (!response.ok) throw new Error('Error al eliminar');
-              fetchScheduledCalls();
-            }
-          }
-        ]
-      );
-    } catch (error) {
-      console.error(error);
-      Alert.alert('Error', 'No se pudo eliminar la llamada');
-    }
-  };
-
-  const handleEdit = (call: LlamadaAgendada) => {
-    setSelectedCall(call);
-    openSheet();
-  };
-
-  const handleCloseSheet = () => {
-    setSelectedCall(null);
-    closeSheet();
-  };
+  const renderItem = ({ item }: { item: ScheduledCall }) => (
+    <ScheduleCard
+      item={item}
+      onPress={() => handleOpenEditSheet(item)}
+      onToggle={(v) => handleToggle(item.id, v)}
+      onDelete={() => handleDelete(item.id)}
+    />
+  );
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        {/* Encabezado */}
         <View style={styles.header}>
-          <Text style={styles.title}>Llamadas Agendadas</Text>
+          <Text style={styles.title}>Agendar Llamadas</Text>
         </View>
 
-        {/* Lista de llamadas */}
         {loading ? (
           <View style={styles.loadingContainer}>
-            <Text style={styles.loadingText}>Cargando...</Text>
+            <Text style={styles.loadingText}>Cargando llamadas...</Text>
           </View>
-        ) : scheduledCalls.length > 0 ? (
+        ) : scheduledCalls.length === 0 ? (
+          <View style={styles.noCallsContainer}>
+            <Text style={styles.noCallsText}>No hay llamadas agendadas.{'\n'}¡Toca el botón '+' para añadir una!</Text>
+          </View>
+        ) : (
           <FlatList
             data={scheduledCalls}
-            renderItem={({ item }) => (
-              <ScheduleCard
-                call={item}
-                onToggle={(isActive) => handleToggle(item.id, isActive)}
-                onDelete={() => handleDelete(item.id)}
-                onPress={() => handleEdit(item)}
-              />
-            )}
+            renderItem={renderItem}
             keyExtractor={item => item.id}
-            refreshing={loading}
-            onRefresh={fetchScheduledCalls}
           />
-        ) : (
-          <View style={styles.noCallsContainer}>
-            <Text style={styles.noCallsText}>
-              No tienes llamadas agendadas. ¡Crea una!
-            </Text>
-          </View>
         )}
 
         {/* Botón flotante para agregar */}
@@ -184,16 +191,17 @@ export default function AgendarLlamadasScreen() {
         </Pressable>
 
         {/* Hoja inferior para agregar/editar */}
-        <ScheduleSheet 
-          isVisible={isVisible} 
-          onClose={handleCloseSheet} 
-          onSave={handleSave} 
+        <ScheduleSheet
+          isVisible={isVisible}
+          onClose={handleCloseSheet}
+          onSave={handleSave}
           initial={selectedCall}
         />
       </View>
     </SafeAreaView>
   );
 }
+
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
   container: { flex: 1, paddingHorizontal: spacing.md },
@@ -228,7 +236,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 4,
+    elevation: 5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
