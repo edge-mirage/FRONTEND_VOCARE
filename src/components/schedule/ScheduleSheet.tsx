@@ -1,21 +1,19 @@
+// src/components/dates/ScheduleSheet.tsx
 import React, { useMemo, useRef, useState } from 'react';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import DatePicker from 'react-native-date-picker';
 import { Calendar } from 'react-native-calendars';
-import { View, Text, StyleSheet, Pressable, TextInput, Alert, Platform } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import DayPill from '@/components/DayPill';
+import { View, Text, StyleSheet, Pressable, TextInput } from 'react-native';
+import { Ionicons } from '@react-native-vector-icons/ionicons';
+import DayPill from './DayPill';
 import { colors, spacing } from '@/theme';
-import { Weekday, ScheduledCall, OneoffRepeat, WeeklyRepeat } from '@/domain/schedule/types';
+import { Weekday, ScheduledCall } from '@/domain/schedule/types';
 import { CONTEXT_PRESETS, VOICE_OPTIONS, DURATION_OPTIONS } from '@/domain/schedule/options';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
-
 
 type Props = {
   initial?: Partial<ScheduledCall>;
   onClose: () => void;
-  onSave: (payload: Omit<ScheduledCall, 'id'|'user_id'|'created_at'|'updated_at'>) => void;
+  onSave: (payload: Omit<ScheduledCall, 'id'>) => void;
 };
 
 export default function ScheduleSheet({ initial, onClose, onSave }: Props) {
@@ -26,258 +24,173 @@ export default function ScheduleSheet({ initial, onClose, onSave }: Props) {
   const [days, setDays] = useState<Weekday[]>(
     initial?.repeat?.type==='weekly' ? initial.repeat.days : [1,3,5]
   );
-  const [date, setDate] = useState(
-    initial?.repeat?.type === 'oneoff'
-    ? initial.repeat.dateISO || new Date().toISOString()
-    : new Date().toISOString()
+  const [dateISO, setDateISO] = useState<string | undefined>(
+    initial?.repeat?.type==='oneoff' ? initial.repeat.dateISO : undefined
   );
-  const [note, setNote] = useState(initial?.note || '');
-  const [context, setContext] = useState(initial?.contextId || CONTEXT_PRESETS[0]);
-  const [voice, setVoice] = useState(initial?.voiceId || VOICE_OPTIONS[0]);
-  const [duration, setDuration] = useState(initial?.durationMin || 10);
-  const [showDuration, setShowDuration] = useState(false);
-  const [showVoice, setShowVoice] = useState(false);
-  const [showContext, setShowContext] = useState(false);
 
-  const [datePickerVisible, setDatePickerVisible] = useState(false);
+  // NUEVO estado de campos
+  const [contextText, setContextText] = useState(initial?.note ?? '');
+  const [contextId, setContextId] = useState<string | undefined>(initial?.contextId);
+  const [voiceId, setVoiceId] = useState<string | undefined>(initial?.voiceId);
+  const [durationMin, setDurationMin] = useState<number>(initial?.durationMin ?? 10);
 
-  const selectedDate = useMemo(() => {
-    return date ? { [date.split('T')[0]]: { selected: true } } : {};
-  }, [date]);
+  const [showContextList, setShowContextList] = useState(false);
+  const [showVoiceList, setShowVoiceList] = useState(false);
 
-  const handleDayToggle = (day: Weekday) => {
-    setDays((prev) => {
-      const idx = prev.indexOf(day);
-      if (idx > -1) {
-        return prev.filter((d) => d !== day);
-      } else {
-        return [...prev, day];
-      }
-    });
-  };
+  function toggleDay(d: Weekday) {
+    setDays(prev => prev.includes(d) ? prev.filter(x=>x!==d) : [...prev, d].sort());
+  }
 
-  const handleSave = () => {
-    let repeatData: WeeklyRepeat | OneoffRepeat;
-    if (tab === 'weekly') {
-      if (days.length === 0) {
-        Alert.alert('Error', 'Debes seleccionar al menos un día de la semana.');
-        return;
-      }
-      repeatData = { type: 'weekly', days: days.sort() };
-    } else {
-      repeatData = { type: 'oneoff', dateISO: date };
-    }
-
-    const payload: Omit<ScheduledCall, 'id'|'user_id'|'created_at'|'updated_at'> = {
+  function save() {
+    const payload: Omit<ScheduledCall,'id'> = {
       timeISO: time.toISOString(),
-      repeat: repeatData,
-      note,
-      contextId: context,
-      voiceId: voice,
-      durationMin: duration,
+      repeat: tab==='weekly'
+        ? { type: 'weekly', days }
+        : { type: 'oneoff', dateISO: dateISO! },
+      note: contextText,
+      contextId,
+      durationMin,
+      voiceId,
       active: true,
     };
     onSave(payload);
-  };
-  
+    ref.current?.close();
+  }
+
+  const voiceLabel = voiceId
+    ? VOICE_OPTIONS.find(v => v.id === voiceId)?.label
+    : undefined;
+
+  const canSave = tab === 'weekly' ? days.length > 0 : !!dateISO;
+
   return (
-    <BottomSheet
-      ref={ref}
-      snapPoints={snapPoints}
-      onClose={onClose}
-      index={isVisible ? 0 : -1}
-      enablePanDownToClose
-      backgroundStyle={styles.sheet}
-    >
+    <BottomSheet ref={ref} index={1} snapPoints={snapPoints} enablePanDownToClose onClose={onClose}>
       <BottomSheetView style={styles.content}>
-        <View style={styles.header}>
-          <Pressable onPress={onClose} style={styles.closeBtn}>
-            <Ionicons name="close" size={24} color={colors.text} />
+        {/* tabs */}
+        <View style={styles.tabs}>
+          <Pressable onPress={()=>setTab('weekly')} style={[styles.tab, tab==='weekly'&&styles.tabOn]}>
+            <Text style={styles.tabText}>Llamadas rutinarias</Text>
           </Pressable>
-          <Text style={styles.title}>
-            {initial ? 'Editar Llamada' : 'Nueva Llamada'}
-          </Text>
-          <Pressable onPress={handleSave} style={styles.saveBtn}>
-            <Text style={styles.saveText}>Guardar</Text>
+          <Pressable onPress={()=>setTab('calendar')} style={[styles.tab, tab==='calendar'&&styles.tabOn]}>
+            <Text style={styles.tabText}>Calendario</Text>
           </Pressable>
         </View>
 
-        <View style={styles.tabBar}>
-          <Pressable
-            onPress={() => setTab('weekly')}
-            style={[styles.tab, tab === 'weekly' && styles.tabActive]}
-          >
-            <Text style={[styles.tabText, tab === 'weekly' && styles.tabTextActive]}>Semanal</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setTab('calendar')}
-            style={[styles.tab, tab === 'calendar' && styles.tabActive]}
-          >
-            <Text style={[styles.tabText, tab === 'calendar' && styles.tabTextActive]}>Única</Text>
-          </Pressable>
+        {/* selector de hora (centro) */}
+        <View style={styles.pickerWrap}>
+          <DatePicker date={time} onDateChange={setTime} mode="time" />
         </View>
 
-        <View style={styles.timeSection}>
-          <DatePicker
-            date={time}
-            onDateChange={setTime}
-            mode="time"
-            locale='es'
-            androidVariant='nativeAndroid'
+        {/* patrón de repetición */}
+        {tab==='weekly' ? (
+          <View style={{marginTop: spacing.md, flexDirection:'row', justifyContent:'space-between'}}>
+            {([1,2,3,4,5,6,0] as Weekday[]).map((d)=>( // L M X J V S D
+              <DayPill
+                key={d}
+                label={['D','L','M','X','J','V','S'][d]}
+                selected={days.includes(d)}
+                onToggle={()=>toggleDay(d)}
+              />
+            ))}
+          </View>
+        ) : (
+          <Calendar
+            onDayPress={(d)=>setDateISO(d.dateString)}
+            markedDates={dateISO ? { [dateISO]: { selected:true } } : {}}
+            theme={{ todayTextColor: colors.primary, selectedDayBackgroundColor: colors.primary }}
+            style={{ marginTop: spacing.md, borderRadius: 12 }}
           />
-        </View>
+        )}
 
-        <View style={styles.section}>
-          {tab === 'weekly' ? (
-            <View style={styles.daysContainer}>
-              {['D', 'L', 'M', 'M', 'J', 'V', 'S'].map((day, index) => (
-                <DayPill
-                  key={index}
-                  label={day}
-                  selected={days.includes(index as Weekday)}
-                  onToggle={() => handleDayToggle(index as Weekday)}
-                />
-              ))}
-            </View>
-          ) : (
-            <Calendar
-              current={date}
-              onDayPress={(day) => setDate(day.dateString)}
-              markedDates={selectedDate}
-              theme={{
-                todayTextColor: colors.primary,
-                selectedDayBackgroundColor: colors.primary,
-                selectedDayTextColor: '#fff',
-                textDayFontWeight: '500',
-                textMonthFontWeight: 'bold',
-                textDayHeaderFontWeight: '700',
-              }}
-            />
-          )}
-        </View>
+        {/* ---- CAMPOS NUEVOS ---- */}
 
-        <View style={styles.section}>
-          <Text style={styles.label}>Notas</Text>
+        {/* Contexto (texto + sugerencias) */}
+        <Text style={styles.fieldLabel}>Contexto</Text>
+        <View style={styles.contextRow}>
           <TextInput
+            value={contextText}
+            onChangeText={(t)=>{ setContextText(t); setContextId(undefined); }}
+            placeholder="Escriba o seleccione el contexto para esta llamada"
+            placeholderTextColor="#9CA3AF"
             style={styles.textarea}
-            value={note}
-            onChangeText={setNote}
-            placeholder="Añade una nota para recordarte por qué agendaste esta llamada..."
             multiline
           />
+          <Pressable onPress={() => setShowContextList((v)=>!v)} style={styles.dropdownBtn}>
+            <Ionicons name="chevron-down" size={18} color={colors.text} />
+          </Pressable>
+        </View>
+        {showContextList && (
+          <View style={styles.dropdown}>
+            {CONTEXT_PRESETS.map(p => (
+              <Pressable
+                key={p.id}
+                onPress={() => { setContextId(p.id); setContextText(p.label); setShowContextList(false); }}
+                style={styles.dropdownItem}
+              >
+                <Text style={styles.dropdownText}>{p.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+
+        {/* Voz replicada */}
+        <Text style={styles.fieldLabel}>Voz replicada</Text>
+        <Pressable style={styles.selectRow} onPress={() => setShowVoiceList(v=>!v)}>
+          <Text style={voiceLabel ? styles.selectTextValue : styles.selectPlaceholder}>
+            {voiceLabel ?? 'Seleccione una voz replicada a usar'}
+          </Text>
+          <Ionicons name="chevron-down" size={18} color={colors.text} />
+        </Pressable>
+        {showVoiceList && (
+          <View style={styles.dropdown}>
+            {VOICE_OPTIONS.map(v => (
+              <Pressable
+                key={v.id}
+                onPress={() => { setVoiceId(v.id); setShowVoiceList(false); }}
+                style={styles.dropdownItem}
+              >
+                <Text style={styles.dropdownText}>{v.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+
+        {/* Duración aproximada */}
+        <Text style={styles.fieldLabel}>Duración aproximada</Text>
+        <View style={styles.chipsRow}>
+          {DURATION_OPTIONS.map(m => {
+            const on = durationMin === m;
+            return (
+              <Pressable key={m} onPress={()=>setDurationMin(m)} style={[styles.chip, on && styles.chipOn]}>
+                <Text style={[styles.chipText, on && styles.chipTextOn]}>{m} min</Text>
+              </Pressable>
+            );
+          })}
         </View>
 
-        {/* Sección de opciones avanzadas */}
-        <View style={styles.section}>
-          <Pressable onPress={() => setShowContext(!showContext)} style={styles.selectRow}>
-            <Text style={styles.label}>Contexto</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={styles.selectTextValue}>{context}</Text>
-              <Ionicons name={showContext ? "chevron-up" : "chevron-down"} size={16} color={colors.text} style={{ marginLeft: spacing.sm }}/>
-            </View>
+        {/* Botonera */}
+        <View style={styles.actions}>
+          <Pressable onPress={onClose}><Text style={{color:'#b91c1c', fontWeight:'700'}}>Cancelar</Text></Pressable>
+          <Pressable disabled={!canSave} onPress={save}>
+            <Text style={{color: canSave ? colors.primary : '#9CA3AF', fontWeight:'700'}}>Guardar</Text>
           </Pressable>
-          {showContext && (
-            <View style={styles.dropdown}>
-              {CONTEXT_PRESETS.map(ctx => (
-                <Pressable
-                  key={ctx}
-                  style={styles.dropdownItem}
-                  onPress={() => { setContext(ctx); setShowContext(false); }}
-                >
-                  <Text style={styles.dropdownText}>{ctx}</Text>
-                </Pressable>
-              ))}
-            </View>
-          )}
-
-          <Pressable onPress={() => setShowVoice(!showVoice)} style={[styles.selectRow, { marginTop: spacing.sm }]}>
-            <Text style={styles.label}>Voz</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={styles.selectTextValue}>{voice}</Text>
-              <Ionicons name={showVoice ? "chevron-up" : "chevron-down"} size={16} color={colors.text} style={{ marginLeft: spacing.sm }}/>
-            </View>
-          </Pressable>
-          {showVoice && (
-            <View style={styles.dropdown}>
-              {VOICE_OPTIONS.map(v => (
-                <Pressable
-                  key={v}
-                  style={styles.dropdownItem}
-                  onPress={() => { setVoice(v); setShowVoice(false); }}
-                >
-                  <Text style={styles.dropdownText}>{v}</Text>
-                </Pressable>
-              ))}
-            </View>
-          )}
-
-          <Pressable onPress={() => setShowDuration(!showDuration)} style={[styles.selectRow, { marginTop: spacing.sm }]}>
-            <Text style={styles.label}>Duración</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={styles.selectTextValue}>{duration} min</Text>
-              <Ionicons name={showDuration ? "chevron-up" : "chevron-down"} size={16} color={colors.text} style={{ marginLeft: spacing.sm }}/>
-            </View>
-          </Pressable>
-          {showDuration && (
-            <View style={styles.dropdown}>
-              {DURATION_OPTIONS.map(d => (
-                <Pressable
-                  key={d}
-                  style={styles.dropdownItem}
-                  onPress={() => { setDuration(d); setShowDuration(false); }}
-                >
-                  <Text style={styles.dropdownText}>{d} min</Text>
-                </Pressable>
-              ))}
-            </View>
-          )}
         </View>
-
       </BottomSheetView>
     </BottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  sheet: { backgroundColor: '#F9FAFB', borderTopLeftRadius: 24, borderTopRightRadius: 24 },
-  content: { paddingHorizontal: spacing.md, paddingBottom: spacing.lg },
+  content: { paddingHorizontal: spacing.xl, paddingTop: spacing.md },
+  tabs: { flexDirection:'row', backgroundColor:'#f5d8ff', borderRadius:999, padding:4, alignSelf:'center', marginBottom: spacing.md },
+  tab: { paddingVertical:6, paddingHorizontal:12, borderRadius:999 },
+  tabOn: { backgroundColor: colors.primary },
+  tabText: { color:'#fff', fontWeight:'700' },
 
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.md,
-    paddingTop: spacing.sm,
-  },
-  title: { fontSize: 20, fontWeight: 'bold', color: colors.text },
-  closeBtn: { padding: spacing.sm },
-  saveBtn: { padding: spacing.sm },
-  saveText: { color: colors.primary, fontWeight: 'bold', fontSize: 16 },
+  pickerWrap: { alignItems: 'center', marginVertical: spacing.md },
 
-  tabBar: {
-    flexDirection: 'row',
-    backgroundColor: '#E5E7EB',
-    borderRadius: 12,
-    marginBottom: spacing.md,
-  },
-  tab: { flex: 1, paddingVertical: spacing.sm, alignItems: 'center' },
-  tabActive: { backgroundColor: colors.primary, borderRadius: 10 },
-  tabText: { color: colors.textMuted, fontWeight: '600' },
-  tabTextActive: { color: '#fff' },
-
-  section: { marginBottom: spacing.lg },
-
-  timeSection: {
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-
-  daysContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-
-  label: { fontSize: 16, fontWeight: '600', color: colors.text, marginBottom: spacing.sm },
+  fieldLabel: { marginTop: spacing.lg, marginBottom: spacing.sm, fontWeight:'700', color: colors.text },
+  contextRow: { position:'relative' },
   textarea: {
     minHeight: 68,
     borderRadius: 12,
@@ -317,10 +230,12 @@ const styles = StyleSheet.create({
 
   chipsRow: { flexDirection:'row', flexWrap:'wrap', gap: 8 },
   chip: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    backgroundColor: '#E5E7EB',
+    paddingVertical: 8, paddingHorizontal: 12,
+    borderRadius: 999, backgroundColor: '#F3F4F6',
   },
-  chipText: { color: colors.text },
+  chipOn: { backgroundColor: colors.primary },
+  chipText: { color: '#4B5563', fontWeight:'600' },
+  chipTextOn: { color: '#fff' },
+
+  actions: { marginTop: spacing.xl, flexDirection:'row', justifyContent:'space-between' },
 });

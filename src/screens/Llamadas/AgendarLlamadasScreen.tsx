@@ -1,245 +1,147 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, Alert } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, FlatList, Pressable, StyleSheet, Text, ActivityIndicator, Alert } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { colors, spacing } from '@/theme';
-import ScheduleCard from '@/components/schedule/ScheduleCard';
-import ScheduleSheet from '@/components/schedule/ScheduleSheet';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useSheet } from '@/hooks/useSheet';
-import { ScheduledCall } from '@/domain/schedule/types';
-import { getAuthToken } from '@/services/auth';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Ionicons } from '@react-native-vector-icons/ionicons';
 
-const API_BASE_URL = 'http://192.168.1.5:8000/agendar-llamadas'; 
+import Header from '@/components/Header';
+import ScheduleCard from '@/components/schedule/ScheduleCard';
+import { colors, spacing } from '@/theme';
+import type { ScheduledCall } from '@/domain/schedule/types';
+import type { LlamadaStackParamList } from '@/navigation/types';
+
+// 🔗 CRUD + mappers
+import {
+  listSchedulesByGroup, createSchedule, updateSchedule, deleteSchedule,
+  apiToUI, uiToApiCreate, uiToApiPatch,
+} from '@/crud/schedule';
+
+type Nav = NativeStackNavigationProp<LlamadaStackParamList, 'AgendarLlamada'>;
 
 export default function AgendarLlamadasScreen() {
-  const navigation = useNavigation();
-  const { isVisible, openSheet, closeSheet } = useSheet();
-  const [scheduledCalls, setScheduledCalls] = useState<ScheduledCall[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedCall, setSelectedCall] = useState<ScheduledCall | null>(null);
+  const navigation = useNavigation<Nav>();
 
-  const fetchScheduledCalls = async () => {
+  // ⚠️ Usa el grupo real desde tu estado/auth
+  const GROUP_UUID = 'b9283e77-561b-4b4a-827a-d2648990eb27';
+
+  const [items, setItems] = useState<ScheduledCall[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async () => {
     try {
       setLoading(true);
-      const token = await getAuthToken();
-      if (!token) {
-        throw new Error('No se encontró el token de autenticación');
-      }
-      const response = await fetch(API_BASE_URL, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Error al cargar llamadas');
-      }
-      const data = await response.json();
-      setScheduledCalls(data);
-    } catch (error) {
-      console.error('Error fetching scheduled calls:', error);
-      Alert.alert('Error', `No se pudieron cargar las llamadas: ${error.message}`);
+      const rows = await listSchedulesByGroup(GROUP_UUID);
+      setItems(rows.map(apiToUI));
+    } catch (e: any) {
+      console.warn('Error listSchedulesByGroup', e?.message || e);
+      Alert.alert('Error', 'No se pudieron cargar las llamadas.');
     } finally {
       setLoading(false);
     }
-  };
+  }, [GROUP_UUID]);
 
-  useEffect(() => {
-    fetchScheduledCalls();
-  }, []);
+  useEffect(() => { load(); }, [load]);
 
-  const handleOpenEditSheet = (call: ScheduledCall) => {
-    setSelectedCall(call);
-    openSheet();
-  };
-
-  const handleCloseSheet = () => {
-    setSelectedCall(null);
-    closeSheet();
-  };
-
-  const handleSave = async (payload: any) => {
+  // ---- acciones ----
+  const add = async (payload: Omit<ScheduledCall, 'id'>) => {
     try {
-      const token = await getAuthToken();
-      if (!token) {
-        throw new Error('No se encontró el token de autenticación');
-      }
-      const headers = {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      };
-
-      let response;
-      if (selectedCall) {
-        response = await fetch(`${API_BASE_URL}/${selectedCall.id}`, {
-          method: 'PUT',
-          headers: headers,
-          body: JSON.stringify(payload),
-        });
-      } else {
-        response = await fetch(API_BASE_URL, {
-          method: 'POST',
-          headers: headers,
-          body: JSON.stringify(payload),
-        });
-      }
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Error en la solicitud');
-      }
-
-      await fetchScheduledCalls();
-      handleCloseSheet();
-    } catch (error) {
-      console.error('Error al guardar la llamada:', error);
-      Alert.alert('Error', `No se pudo guardar la llamada: ${error.message}`);
+      const created = await createSchedule(uiToApiCreate(payload, GROUP_UUID));
+      setItems(prev => [apiToUI(created), ...prev]);
+    } catch (e: any) {
+      Alert.alert('Error', 'No se pudo crear la llamada.');
     }
   };
 
-  const handleDelete = async (callId: string) => {
+  const update = async (id: string, payload: Omit<ScheduledCall, 'id'>) => {
     try {
-      const token = await getAuthToken();
-      if (!token) {
-        throw new Error('No se encontró el token de autenticación');
-      }
-      const headers = {
-        'Authorization': `Bearer ${token}`,
-      };
-      const response = await fetch(`${API_BASE_URL}/${callId}`, {
-        method: 'DELETE',
-        headers: headers,
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Error al eliminar');
-      }
-
-      await fetchScheduledCalls();
-    } catch (error) {
-      console.error('Error al eliminar la llamada:', error);
-      Alert.alert('Error', `No se pudo eliminar la llamada: ${error.message}`);
+      const updated = await updateSchedule(Number(id), uiToApiPatch(payload));
+      setItems(prev => prev.map(i => (i.id === id ? apiToUI(updated) : i)));
+    } catch (e: any) {
+      Alert.alert('Error', 'No se pudo actualizar la llamada.');
     }
   };
 
-  const handleToggle = async (callId: string, isActive: boolean) => {
+  // 🔴 ahora persiste 'active' (optimista con rollback)
+  const toggle = async (id: string, on: boolean) => {
+    setItems(prev => prev.map(i => (i.id === id ? { ...i, active: on } : i)));
     try {
-      const token = await getAuthToken();
-      if (!token) {
-        throw new Error('No se encontró el token de autenticación');
-      }
-      const headers = {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      };
-      const response = await fetch(`${API_BASE_URL}/${callId}/toggle?activo=${isActive}`, {
-        method: 'PUT',
-        headers: headers,
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Error al alternar estado');
-      }
-
-      await fetchScheduledCalls();
-    } catch (error) {
-      console.error('Error al alternar el estado:', error);
-      Alert.alert('Error', `No se pudo alternar el estado: ${error.message}`);
+      const updated = await updateSchedule(Number(id), { active: on });
+      // refrescamos el item por si el backend devuelve otros campos normalizados
+      setItems(prev => prev.map(i => (i.id === id ? apiToUI(updated as any) : i)));
+    } catch (e: any) {
+      // rollback
+      setItems(prev => prev.map(i => (i.id === id ? { ...i, active: !on } : i)));
+      Alert.alert('Error', 'No se pudo cambiar el estado de la llamada.');
     }
   };
 
-  const renderItem = ({ item }: { item: ScheduledCall }) => (
-    <ScheduleCard
-      item={item}
-      onPress={() => handleOpenEditSheet(item)}
-      onToggle={(v) => handleToggle(item.id, v)}
-      onDelete={() => handleDelete(item.id)}
-    />
-  );
+  const del = async (id: string) => {
+    try {
+      await deleteSchedule(Number(id));
+      setItems(prev => prev.filter(i => i.id !== id));
+    } catch (e: any) {
+      Alert.alert('Error', 'No se pudo eliminar la llamada.');
+    }
+  };
+
+  const openNew = () => {
+    navigation.navigate('LlamadaEditor', {
+      onSubmit: (payload: Omit<ScheduledCall, 'id'>) => add(payload),
+    });
+  };
+
+  const openEdit = (item: ScheduledCall) => {
+    navigation.navigate('LlamadaEditor', {
+      initial: item,
+      onSubmit: (payload: Omit<ScheduledCall, 'id'>) => update(item.id, payload),
+    });
+  };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Agendar Llamadas</Text>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <Header title="Llamadas Agendadas" elevated />
+
+      {loading ? (
+        <View style={{ flex:1, alignItems:'center', justifyContent:'center' }}>
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
-
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <Text style={styles.loadingText}>Cargando llamadas...</Text>
-          </View>
-        ) : scheduledCalls.length === 0 ? (
-          <View style={styles.noCallsContainer}>
-            <Text style={styles.noCallsText}>No hay llamadas agendadas.{'\n'}¡Toca el botón '+' para añadir una!</Text>
-          </View>
-        ) : (
-          <FlatList
-            data={scheduledCalls}
-            renderItem={renderItem}
-            keyExtractor={item => item.id}
-          />
-        )}
-
-        {/* Botón flotante para agregar */}
-        <Pressable style={styles.addButton} onPress={openSheet}>
-          <Ionicons name="add" size={28} color="#fff" />
-        </Pressable>
-
-        {/* Hoja inferior para agregar/editar */}
-        <ScheduleSheet
-          isVisible={isVisible}
-          onClose={handleCloseSheet}
-          onSave={handleSave}
-          initial={selectedCall}
+      ) : (
+        <FlatList
+          contentContainerStyle={{ padding: spacing.xl, paddingBottom: spacing.xxl * 2 }}
+          data={items}
+          keyExtractor={(i) => i.id}
+          renderItem={({ item }) => (
+            <ScheduleCard
+              item={item}
+              onPress={() => openEdit(item)}
+              onToggle={(v) => toggle(item.id, v)}
+              onDelete={() => del(item.id)}
+            />
+          )}
+          ListEmptyComponent={
+            <View style={styles.empty}>
+              <Text style={styles.emptyTitle}>No hay llamadas agendadas</Text>
+              <Text style={styles.emptySubtitle}>Toca el botón “+” para crear una nueva.</Text>
+            </View>
+          }
         />
-      </View>
-    </SafeAreaView>
+      )}
+
+      <Pressable onPress={openNew} style={styles.fab} android_ripple={{ color: 'rgba(255,255,255,0.25)' }}>
+        <Ionicons name="add" size={26} color="#fff" />
+      </Pressable>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.background },
-  container: { flex: 1, paddingHorizontal: spacing.md },
-  header: { alignItems: 'center', marginBottom: spacing.md, marginTop: spacing.sm },
-  title: { fontSize: 24, fontWeight: 'bold', color: colors.text },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  fab: {
+    position: 'absolute', right: spacing.xl, bottom: spacing.xl,
+    width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: colors.primary, elevation: 4,
+    shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 6, shadowOffset: { width: 0, height: 3 },
   },
-  loadingText: {
-    fontSize: 16,
-    color: colors.textMuted,
-  },
-  noCallsContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  noCallsText: {
-    fontSize: 16,
-    color: colors.textMuted,
-    textAlign: 'center',
-  },
-  addButton: {
-    position: 'absolute',
-    right: spacing.md,
-    bottom: spacing.md,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
+  empty: { alignItems: 'center', paddingVertical: spacing.xl },
+  emptyTitle: { fontWeight: '700', color: colors.text, marginBottom: 4 },
+  emptySubtitle: { color: colors.textMuted },
 });
