@@ -42,7 +42,12 @@ export type MainTabParamList = {
 };
 
 export type RootStackParamList = {
+  Login: undefined;
+  RecoverPassword: undefined;
+  VerifyCode: {
+    email: string;
+    newPassword: string;
+  };
   MainTabs: undefined;
   HomeStack: undefined;
-  Login: undefined;
 };

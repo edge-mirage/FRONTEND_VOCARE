@@ -1,13 +1,16 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  View, FlatList, StyleSheet, RefreshControl, Pressable, Modal, Text, TextInput, Button,
+  View, FlatList, StyleSheet, RefreshControl, Pressable, Modal, Text, TextInput, Button, Alert,
 } from 'react-native';
 import { Ionicons } from '@react-native-vector-icons/ionicons';
 import Header from '@/components/Header';
 import { colors, spacing } from '@/theme';
-import { PlainItem } from '@/components/plain';
-import { getPacientById, addInterest, updateInterest, deleteInterest} from '@/crud/pacient';
-import { StorageService } from '@/services/StorageService';
+import { 
+  getCurrentPacient,  // ✅ Usar esta función
+  addInterestByGroup, 
+  updateInterestByGroup, 
+  deleteInterestByGroup 
+} from '@/crud/pacient';
 
 type Interes = {
   id: string;
@@ -24,72 +27,74 @@ export default function InteresesScreen() {
   const [editingItem, setEditingItem] = useState<Interes | null>(null);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<Interes | null>(null);
-  const [pacientId, setPacientId] = useState<number | null>(null);
 
-  // Cargar pacient_id desde storage al inicializar
-  useEffect(() => {
-    const loadPacientId = async () => {
-      const id = await StorageService.getPacientId();
-      setPacientId(id);
-    };
-    loadPacientId();
-  }, []);
-
-  // Simula carga desde API
   const fetchIntereses = useCallback(async () => {
-    if (!pacientId) return;
-    
     try {
       setLoading(true);
-      const resp = await getPacientById(pacientId);
-      console.log('Respuesta API:', resp);
+      console.log('🔍 Obteniendo intereses...');
+      // ✅ Usar getCurrentPacient (no getPacientByGroupUuid)
+      const resp = await getCurrentPacient();
       
-      const rawInterests = resp.data.interests || [];
-
-      const mapped = rawInterests.map((it: any, index: number) => ({
-        id: index.toString(),
-        nombre: it.nombre,
-        descripcion: it.descripcion || '',
-      }));
-
-      setItems(mapped);
-      console.log('Intereses mapeados:', mapped);
+      if (resp.data) {
+        const rawInterests = resp.data.interests || [];
+        const mapped = rawInterests.map((it: any, index: number) => ({
+          id: index.toString(),
+          nombre: it.nombre || it.name || 'Interés',
+          descripcion: it.descripcion || it.description || '',
+        }));
+        setItems(mapped);
+        console.log('✅ Intereses cargados:', mapped.length);
+      }
     } catch (err) {
-      console.error('Error al obtener intereses:', err);
-  } finally {
-    setLoading(false);
-  }
-}, [pacientId]);
-
+      console.error('❌ Error al obtener intereses:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   const handleCreateInteres = async () => {
-    if (!pacientId) return;
+    if (!draftNombre.trim()) {
+      Alert.alert('Error', 'El nombre del interés es requerido');
+      return;
+    }
     
     try {
+      console.log('💾 Guardando interés:', { nombre: draftNombre, descripcion: draftDescripcion });
+      
       if (editingItem) {
-        // Update existing item - the API expects a string or object, let's use object format
+        // ✅ No pasar groupUuid - las funciones *ByGroup lo obtienen internamente
         const interestObj = {
-          nombre: draftNombre,
-          descripcion: draftDescripcion,
+          nombre: draftNombre.trim(),
+          name: draftNombre.trim(),
+          descripcion: draftDescripcion.trim(),
+          description: draftDescripcion.trim(),
         };
-        await updateInterest(pacientId, parseInt(editingItem.id), JSON.stringify(interestObj));
+        await updateInterestByGroup(parseInt(editingItem.id), interestObj);
+        console.log('✅ Interés actualizado');
+        Alert.alert('Éxito', 'Interés actualizado correctamente');
       } else {
-        // Create new item
+        // ✅ No pasar groupUuid
         const interestObj = {
-          nombre: draftNombre,
-          descripcion: draftDescripcion,
+          nombre: draftNombre.trim(),
+          name: draftNombre.trim(),
+          descripcion: draftDescripcion.trim(),
+          description: draftDescripcion.trim(),
         };
-        await addInterest(pacientId, interestObj);
+        await addInterestByGroup(interestObj);
+        console.log('✅ Interés creado');
+        Alert.alert('Éxito', 'Interés creado correctamente');
       }
 
       resetModal();
-      fetchIntereses(); // recarga los datos
-    } catch (e) {
-      console.error('Error guardando interés:', e);
+      fetchIntereses();
+    } catch (e: any) {
+      console.error('❌ Error guardando interés:', e);
+      Alert.alert('Error', 'No se pudo guardar el interés');
     }
   };
 
   const handleEditInteres = (item: Interes) => {
+    console.log('📝 Editando interés:', item);
     setEditingItem(item);
     setDraftNombre(item.nombre);
     setDraftDescripcion(item.descripcion || '');
@@ -97,22 +102,26 @@ export default function InteresesScreen() {
   };
 
   const handleDeleteInteres = (item: Interes) => {
+    console.log('🗑️ Solicitando eliminación de:', item);
     setItemToDelete(item);
     setDeleteModalVisible(true);
   };
 
   const confirmDeleteInteres = async () => {
-    if (!pacientId) return;
+    if (!itemToDelete) return;
     
     try {
-      if (itemToDelete) {
-        await deleteInterest(pacientId, parseInt(itemToDelete.id));
-        setDeleteModalVisible(false);
-        setItemToDelete(null);
-        fetchIntereses();
-      }
-    } catch (e) {
-      console.error('Error eliminando interés:', e);
+      console.log('🗑️ Eliminando interés:', itemToDelete.nombre);
+      // ✅ No pasar groupUuid
+      await deleteInterestByGroup(parseInt(itemToDelete.id));
+      setDeleteModalVisible(false);
+      setItemToDelete(null);
+      fetchIntereses();
+      console.log('✅ Interés eliminado');
+      Alert.alert('Éxito', 'Interés eliminado correctamente');
+    } catch (e: any) {
+      console.error('❌ Error eliminando interés:', e);
+      Alert.alert('Error', 'No se pudo eliminar el interés');
     }
   };
 
@@ -128,13 +137,11 @@ export default function InteresesScreen() {
     setEditingItem(null);
   };
 
-
-
-  useEffect(() => { 
-    if (pacientId) {
-      fetchIntereses();
-    }
-  }, [fetchIntereses, pacientId]);
+  // ✅ No depender de groupUuid
+  useEffect(() => {
+    console.log('🚀 Iniciando carga de intereses...');
+    fetchIntereses();
+  }, [fetchIntereses]);
 
   return (
     <View style={styles.container}>
@@ -145,7 +152,10 @@ export default function InteresesScreen() {
         renderItem={({ item }) => (
           <Pressable
             style={styles.contextItem}
-            onPress={() => handleEditInteres(item)}
+            onPress={() => {
+              console.log('📋 Item presionado:', item);
+              handleEditInteres(item);
+            }}
             android_ripple={{ color: 'rgba(0,0,0,0.05)' }}
           >
             <View style={styles.contextContent}>
@@ -157,6 +167,7 @@ export default function InteresesScreen() {
                 style={styles.actionButton}
                 onPress={(e) => {
                   e.stopPropagation();
+                  console.log('✏️ Botón editar presionado:', item);
                   handleEditInteres(item);
                 }}
                 android_ripple={{ color: 'rgba(0,0,0,0.1)', radius: 20 }}
@@ -167,6 +178,7 @@ export default function InteresesScreen() {
                 style={styles.actionButton}
                 onPress={(e) => {
                   e.stopPropagation();
+                  console.log('🗑️ Botón eliminar presionado:', item);
                   handleDeleteInteres(item);
                 }}
                 android_ripple={{ color: 'rgba(255,0,0,0.1)', radius: 20 }}
@@ -179,42 +191,42 @@ export default function InteresesScreen() {
         refreshControl={
           <RefreshControl refreshing={loading} onRefresh={fetchIntereses} tintColor={colors.primary} />
         }
-        ItemSeparatorComponent={() => (
-          <View style={styles.separator} />
-        )}
+        ItemSeparatorComponent={() => <View style={styles.separator} />}
         contentContainerStyle={styles.listContent}
-        ListEmptyComponent={!loading ? <View style={styles.empty} /> : null}
+        ListEmptyComponent={
+          !loading ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>No hay intereses registrados</Text>
+              <Text style={styles.emptySubtext}>Agrega tu primer interés usando el botón +</Text>
+            </View>
+          ) : null
+        }
       />
       
-
-      <>
-  <Pressable
-      style={styles.fab}
-      onPress={() => setModalVisible(true)}
-      android_ripple={{ color: 'rgba(255,255,255,0.25)' }}
-    >
-      <Ionicons name="add" size={26} color="#fff" />
-    </Pressable>
-
-      <Modal
-        visible={modalVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={resetModal}
+      <Pressable
+        style={styles.fab}
+        onPress={() => {
+          console.log('➕ Botón agregar presionado');
+          setModalVisible(true);
+        }}
+        android_ripple={{ color: 'rgba(255,255,255,0.25)' }}
       >
+        <Ionicons name="add" size={26} color="#fff" />
+      </Pressable>
+
+      {/* Modales iguales que antes */}
+      <Modal visible={modalVisible} animationType="slide" transparent onRequestClose={resetModal}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
             <Text style={styles.modalTitle}>
               {editingItem ? 'Editar Interés' : 'Nuevo Interés'}
             </Text>
-
             <TextInput
               placeholder="Nombre"
               value={draftNombre}
               onChangeText={setDraftNombre}
               style={styles.input}
             />
-
             <TextInput
               placeholder="Descripción"
               value={draftDescripcion}
@@ -222,7 +234,6 @@ export default function InteresesScreen() {
               style={[styles.input, { height: 80 }]}
               multiline
             />
-
             <View style={styles.modalButtons}>
               <Button title="Cancelar" color="#888" onPress={resetModal} />
               <Button title={editingItem ? 'Actualizar' : 'Guardar'} onPress={handleCreateInteres} />
@@ -231,12 +242,7 @@ export default function InteresesScreen() {
         </View>
       </Modal>
 
-      <Modal
-        visible={deleteModalVisible}
-        animationType="fade"
-        transparent
-        onRequestClose={cancelDelete}
-      >
+      <Modal visible={deleteModalVisible} animationType="fade" transparent onRequestClose={cancelDelete}>
         <View style={styles.modalOverlay}>
           <View style={styles.confirmModalContainer}>
             <Text style={styles.confirmTitle}>Confirmar eliminación</Text>
@@ -244,7 +250,6 @@ export default function InteresesScreen() {
               ¿Estás seguro de que deseas eliminar "{itemToDelete?.nombre}"?
             </Text>
             <Text style={styles.confirmSubtitle}>Esta acción no se puede deshacer.</Text>
-            
             <View style={styles.confirmButtons}>
               <Button title="Cancelar" color="#888" onPress={cancelDelete} />
               <Button title="Eliminar" color="#e74c3c" onPress={confirmDeleteInteres} />
@@ -252,23 +257,23 @@ export default function InteresesScreen() {
           </View>
         </View>
       </Modal>
-    </>
     </View>
   );
 }
 
+// ✅ Usar los estilos corregidos (iguales que SintomasScreen)
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.card },
   listContent: { paddingBottom: spacing.xl },
   separator: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.divider,
-    marginLeft: spacing.xl,          // alinea con los textos
-    marginRight: spacing.xl,
+    marginHorizontal: spacing.md,
   },
   contextItem: {
-    backgroundColor: colors.card,
+    backgroundColor: '#fff',
     padding: spacing.md,
+    marginHorizontal: spacing.md,
     marginBottom: spacing.sm,
     borderRadius: 8,
     borderWidth: StyleSheet.hairlineWidth,
@@ -276,6 +281,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    elevation: 1,
   },
   contextContent: {
     flex: 1,
@@ -288,7 +294,7 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   contextDescription: {
-    color: colors.text,
+    color: '#666',
     lineHeight: 20,
   },
   actionButtons: {
@@ -297,7 +303,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   actionButton: {
-    padding: spacing.xs,
+    padding: spacing.sm,
     borderRadius: 20,
     backgroundColor: 'rgba(0,0,0,0.05)',
     alignItems: 'center',
@@ -305,17 +311,39 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
   },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: spacing.xl * 2,
+  },
+  emptyText: {
+    fontSize: 18,
+    color: colors.text,
+    marginBottom: spacing.sm,
+    textAlign: 'center',
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+  },
   fab: {
     position: 'absolute',
     right: spacing.xl,
     bottom: spacing.xl,
-    width: 52, height: 52, borderRadius: 26,
-    alignItems: 'center', justifyContent: 'center',
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: colors.primary,
-    elevation: 4,                    // sombra Android
-    shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 6, shadowOffset: { width: 0, height: 3 }, // iOS
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
   },
-  empty: { height: spacing.xl },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.4)',

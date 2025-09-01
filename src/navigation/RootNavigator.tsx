@@ -6,6 +6,8 @@ import { RootStackParamList } from './types';
 import MainTabs from './MainTabs';
 import HomeStack from './HomeStack';
 import LoginScreen from '@/screens/Login/login';
+import RecoverPasswordScreen from '@/screens/Login/RecoverPasswordScreen';
+import VerifyCodeScreen from '@/screens/Login/VerifyCodeScreen';
 import { ActivityIndicator, View } from 'react-native';
 import { colors } from '@/theme';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
@@ -33,7 +35,11 @@ function AppNavigator() {
             <Stack.Screen name="HomeStack" component={HomeStack} />
           </>
         ) : (
-          <Stack.Screen name="Login" component={LoginScreen} />
+          <>
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="RecoverPassword" component={RecoverPasswordScreen} />
+            <Stack.Screen name="VerifyCode" component={VerifyCodeScreen} />
+          </>
         )}
       </Stack.Navigator>
     </NavigationContainer>

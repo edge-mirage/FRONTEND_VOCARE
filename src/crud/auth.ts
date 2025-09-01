@@ -1,8 +1,8 @@
 // src/api/auth_api.ts
-import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from 'axios';
+import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const useLocalServer = false; // Temporal: usar mock para testing
+const useLocalServer = true; // Cambiado a true para usar el servidor local
 const LOCAL_URL = 'http://10.0.2.2:8000'; 
 const PROD_URL = 'https://tu-servidor.com';
 export const BASE_URL = useLocalServer ? LOCAL_URL : PROD_URL;
@@ -46,7 +46,8 @@ const api: AxiosInstance = axios.create({
   timeout: 20000,
 });
 
-api.interceptors.request.use(async (config: AxiosRequestConfig) => {
+// Interceptor de request corregido
+api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
   const access = await AsyncStorage.getItem(ACCESS_KEY);
   if (access && config.headers) {
     config.headers.Authorization = `Bearer ${access}`;
@@ -62,10 +63,11 @@ const processQueue = (token: string | null) => {
   pendingQueue = [];
 };
 
+// Interceptor de response corregido
 api.interceptors.response.use(
-  (res) => res,
+  (res: AxiosResponse) => res,
   async (error: AxiosError) => {
-    const original = error.config as AxiosRequestConfig & { _retry?: boolean };
+    const original = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
     const status = (error.response && error.response.status) || 0;
 
     if (status !== 401 || original._retry) {
@@ -78,8 +80,9 @@ api.interceptors.response.use(
       return new Promise((resolve, reject) => {
         pendingQueue.push((newAccess) => {
           if (!newAccess) return reject(error);
-          if (!original.headers) original.headers = {};
-          original.headers.Authorization = `Bearer ${newAccess}`;
+          if (original.headers) {
+            original.headers.Authorization = `Bearer ${newAccess}`;
+          }
           resolve(api(original));
         });
       });
@@ -90,8 +93,9 @@ api.interceptors.response.use(
       const newTokens = await doRefresh(); 
       processQueue(newTokens?.access_token ?? null);
 
-      if (!original.headers) original.headers = {};
-      original.headers.Authorization = `Bearer ${newTokens?.access_token}`;
+      if (original.headers) {
+        original.headers.Authorization = `Bearer ${newTokens?.access_token}`;
+      }
       return api(original);
     } catch (e) {
       processQueue(null);
@@ -105,11 +109,33 @@ api.interceptors.response.use(
 
 // ===== Helpers de sesión =====
 export async function saveSession(tokens: TokenPairResponse) {
-  await AsyncStorage.multiSet([
-    [ACCESS_KEY, tokens.access_token],
-    [REFRESH_KEY, tokens.refresh_token],
-    [USER_KEY, JSON.stringify(tokens.user)],
-  ]);
+  try {
+    console.log('💾 SAVE SESSION: Iniciando guardado de sesión...');
+    console.log('💾 SAVE SESSION: Tokens recibidos:', {
+      hasAccessToken: !!tokens.access_token,
+      hasRefreshToken: !!tokens.refresh_token,
+      hasUser: !!tokens.user,
+      userId: tokens.user?.id
+    });
+    
+    const dataToSave: [string, string][] = [
+      [ACCESS_KEY, tokens.access_token],
+      [REFRESH_KEY, tokens.refresh_token],
+      [USER_KEY, JSON.stringify(tokens.user)],
+    ];
+    
+    console.log('💾 SAVE SESSION: Guardando en AsyncStorage...');
+    await AsyncStorage.multiSet(dataToSave);
+    console.log('✅ SAVE SESSION: Datos guardados exitosamente');
+    
+    // Verificar que se guardó correctamente
+    const savedUser = await AsyncStorage.getItem(USER_KEY);
+    console.log('🔍 SAVE SESSION: Verificación - usuario guardado:', savedUser ? 'SÍ' : 'NO');
+    
+  } catch (error) {
+    console.error('❌ SAVE SESSION: Error guardando sesión:', error);
+    throw error;
+  }
 }
 
 export async function clearSession() {
@@ -125,87 +151,197 @@ export async function getRefreshToken() {
 }
 
 export async function getUser(): Promise<AuthUser | null> {
-  const raw = await AsyncStorage.getItem(USER_KEY);
-  return raw ? JSON.parse(raw) : null;
+  try {
+    const raw = await AsyncStorage.getItem(USER_KEY);
+    if (!raw || raw === 'undefined' || raw === 'null') {
+      console.log('📭 No hay usuario almacenado o es null/undefined');
+      return null;
+    }
+    
+    const user = JSON.parse(raw);
+    
+    // Validar que el usuario tenga las propiedades mínimas requeridas
+    if (!user || !user.id || !user.email) {
+      console.warn('⚠️ Usuario almacenado no tiene propiedades válidas:', user);
+      return null;
+    }
+    
+    console.log('👤 Usuario obtenido de AsyncStorage:', user);
+    return user;
+  } catch (error) {
+    console.error('❌ Error obteniendo usuario:', error);
+    return null;
+  }
 }
 
 // ===== Endpoints Auth =====
 export async function login(body: LoginBody): Promise<AuthUser> {
-  console.log('🌐 LOGIN: Enviando request a:', `${BASE_URL}/auth/login`);
-  console.log('📤 LOGIN: Body:', { email: body.email, password: '***' });
-  
-  // MOCK para testing - remover cuando el servidor esté funcionando
-  if (!useLocalServer) {
-    console.log('🎭 MOCK: Usando datos de prueba');
-    await new Promise<void>(resolve => setTimeout(resolve, 1000)); // Simular delay de red
-    
-    const mockUser: AuthUser = {
-      id: 1,
-      email: body.email,
-      name: "Usuario Prueba",
-      middle_name: "De",
-      last_name: "Test",
-      dob: "1990-01-01",
-      group_uuid: "4adc944e-ea13-4752-a0a0-dccd65f1635e",
-      voice_id: "voice_001",
-      email_verified: true,
-      created_at: new Date().toISOString()
-    };
-    
-    const mockTokens: TokenPairResponse = {
-      access_token: "mock_access_token_123",
-      refresh_token: "mock_refresh_token_456", 
-      token_type: "bearer",
-      user: mockUser
-    };
-    
-    await saveSession(mockTokens);
-    console.log('💾 MOCK: Sesión mock guardada');
-    return mockUser;
-  }
+  console.log('🌐 LOGIN API: Enviando request a:', `${BASE_URL}/auth/login`);
+  console.log('📤 LOGIN API: Body:', { email: body.email, password: '***' });
   
   try {
-    // Intentar diferentes rutas posibles
-    console.log('🔄 Intentando login con ruta principal...');
-    let loginUrl = `${BASE_URL}/auth/login`;
-    
-    const { data } = await axios.post<TokenPairResponse>(loginUrl, body, {
+    console.log('🔄 LOGIN API: Haciendo request...');
+    const response = await axios.post(`${BASE_URL}/auth/login`, body, {
       headers: { 'Content-Type': 'application/json' },
-      timeout: 10000, // 10 segundos timeout
+      timeout: 10000,
     });
     
-    console.log('✅ LOGIN: Response received:', { user: data.user, hasTokens: !!(data.access_token && data.refresh_token) });
-    await saveSession(data);
-    console.log('💾 LOGIN: Sesión guardada');
-    return data.user;
-  } catch (error) {
-    console.error('❌ LOGIN: Error completo:', error);
+    console.log('✅ LOGIN API: Response status:', response.status);
+    console.log('✅ LOGIN API: Response data (raw):', JSON.stringify(response.data, null, 2));
+    
+    const data = response.data;
+    
+    // Caso 1: Estructura completa (nueva implementación)
+    if (data.access_token && data.refresh_token && data.user) {
+      console.log('✅ LOGIN API: Estructura completa detectada');
+      
+      const tokenData: TokenPairResponse = {
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+        token_type: data.token_type || 'bearer',
+        user: data.user
+      };
+      
+      await saveSession(tokenData);
+      console.log('💾 LOGIN API: Sesión guardada correctamente');
+      return tokenData.user;
+    }
+    // Caso 2: Solo user_id (implementación anterior)
+    else if (data.user_id) {
+      console.log('🔄 LOGIN API: Estructura antigua detectada - adaptando...');
+      
+      const user: AuthUser = {
+        id: data.user_id,
+        email: body.email,
+        name: body.email.split('@')[0],
+        email_verified: true,
+        created_at: new Date().toISOString()
+      };
+      
+      const tokenData: TokenPairResponse = {
+        access_token: `temp_token_${data.user_id}_${Date.now()}`,
+        refresh_token: `temp_refresh_${data.user_id}_${Date.now()}`,
+        token_type: 'bearer',
+        user: user
+      };
+      
+      await saveSession(tokenData);
+      console.log('💾 LOGIN API: Sesión adaptada guardada');
+      return user;
+    }
+    else {
+      console.error('❌ LOGIN API: Respuesta no tiene estructura esperada');
+      console.error('❌ LOGIN API: Datos recibidos:', data);
+      throw new Error('Respuesta del servidor no tiene la estructura esperada');
+    }
+    
+  } catch (error: any) {
+    console.error('❌ LOGIN API: Error completo:', error);
+    
     if (axios.isAxiosError(error)) {
-      console.error('❌ LOGIN: Status:', error.response?.status);
-      console.error('❌ LOGIN: Data:', error.response?.data);
-      console.error('❌ LOGIN: URL intentada:', error.config?.url);
+      console.error('❌ LOGIN API: Es error de Axios');
+      console.error('❌ LOGIN API: Status:', error.response?.status);
+      console.error('❌ LOGIN API: Data:', error.response?.data);
+      
+      const errorMessage = error.response?.data?.detail || error.response?.data?.message || '';
+      
+      // ✅ Manejar errores específicos del backend con códigos correctos
+      if (error.response?.status === 423) {  // ← Cambiar de 403 a 423
+        // Error de cuenta bloqueada
+        if (errorMessage.includes('bloqueada') || errorMessage.includes('blocked')) {
+          const match = errorMessage.match(/(\d+)\s*minutos?/);
+          const minutes = match ? match[1] : '10';
+          
+          const customError = new Error(errorMessage);
+          (customError as any).isBlocked = true;
+          (customError as any).blockedMinutes = minutes;
+          (customError as any).response = error.response;
+          throw customError;
+        }
+      } else if (error.response?.status === 403) {
+        // Error de intentos fallidos pero no bloqueado aún
+        if (errorMessage.includes('Te quedan') || errorMessage.includes('intentos')) {
+          const attemptsMatch = errorMessage.match(/Te quedan (\d+) intentos?/);
+          const remainingAttempts = attemptsMatch ? attemptsMatch[1] : '0';
+          
+          const customError = new Error(errorMessage);
+          (customError as any).isFailedAttempt = true;
+          (customError as any).remainingAttempts = remainingAttempts;
+          (customError as any).response = error.response;
+          throw customError;
+        }
+      } else if (error.response?.status === 422) {
+        // Email no verificado
+        const customError = new Error(errorMessage || 'Email no verificado');
+        (customError as any).isEmailNotVerified = true;
+        (customError as any).response = error.response;
+        throw customError;
+      } else if (error.response?.status === 401) {
+        // Credenciales incorrectas (contraseña incorrecta)
+        const customError = new Error(errorMessage || 'Contraseña incorrecta');
+        (customError as any).isWrongPassword = true;
+        (customError as any).response = error.response;
+        throw customError;
+      } else if (error.response?.status === 404) {
+        // Usuario no encontrado
+        const customError = new Error('Usuario no encontrado');
+        (customError as any).isUserNotFound = true;
+        (customError as any).response = error.response;
+        throw customError;
+      }
       
       // Si es 404, intentar con rutas alternativas
       if (error.response?.status === 404) {
-        console.log('🔄 Intentando rutas alternativas...');
-        const alternativeRoutes = ['/login', '/api/auth/login', '/users/login'];
+        console.log('🔄 LOGIN API: Intentando rutas alternativas...');
+        const alternativeRoutes = ['/login', '/api/auth/login', '/users/login', '/auth/signin'];
         
         for (const route of alternativeRoutes) {
           try {
-            console.log(`🔄 Intentando: ${BASE_URL}${route}`);
-            const { data } = await axios.post<TokenPairResponse>(`${BASE_URL}${route}`, body, {
+            console.log(`🔄 LOGIN API: Intentando: ${BASE_URL}${route}`);
+            const altResponse = await axios.post(`${BASE_URL}${route}`, body, {
               headers: { 'Content-Type': 'application/json' },
               timeout: 10000,
             });
-            console.log(`✅ LOGIN exitoso con ruta: ${route}`);
-            await saveSession(data);
-            return data.user;
-          } catch (altError) {
-            console.log(`❌ Falló ruta ${route}:`, axios.isAxiosError(altError) ? altError.response?.status : altError);
+            
+            console.log(`✅ LOGIN API: Éxito con ruta alternativa: ${route}`);
+            
+            // Aplicar la misma lógica de procesamiento
+            const altData = altResponse.data;
+            
+            if (altData.access_token && altData.user) {
+              const tokenData: TokenPairResponse = {
+                access_token: altData.access_token,
+                refresh_token: altData.refresh_token,
+                token_type: altData.token_type || 'bearer',
+                user: altData.user
+              };
+              await saveSession(tokenData);
+              return tokenData.user;
+            } else if (altData.user_id) {
+              const user: AuthUser = {
+                id: altData.user_id,
+                email: body.email,
+                name: body.email.split('@')[0],
+                email_verified: true,
+                created_at: new Date().toISOString()
+              };
+              const tokenData: TokenPairResponse = {
+                access_token: `temp_token_${altData.user_id}_${Date.now()}`,
+                refresh_token: `temp_refresh_${altData.user_id}_${Date.now()}`,
+                token_type: 'bearer',
+                user: user
+              };
+              await saveSession(tokenData);
+              return user;
+            }
+            
+          } catch (altError: any) {
+            console.log(`❌ LOGIN API: Falló ruta ${route}:`, axios.isAxiosError(altError) ? altError.response?.status : altError);
           }
         }
       }
     }
+    
     throw error;
   }
 }
@@ -233,9 +369,11 @@ export async function logoutAccess(): Promise<void> {
 export async function logoutRefresh(): Promise<void> {
   try {
     const refresh = await getRefreshToken();
-    await axios.post(`${BASE_URL}/auth/logout/refresh`, null, {
-      headers: { Authorization: `Bearer ${refresh}` },
-    });
+    if (refresh) {
+      await axios.post(`${BASE_URL}/auth/logout/refresh`, null, {
+        headers: { Authorization: `Bearer ${refresh}` },
+      });
+    }
   } finally {
     await clearSession();
   }
@@ -259,3 +397,4 @@ async function doRefresh(): Promise<{ access_token: string; refresh_token: strin
 }
 
 export default api;
+

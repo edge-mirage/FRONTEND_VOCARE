@@ -1,13 +1,16 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  View, FlatList, StyleSheet, RefreshControl, Pressable, Modal, TextInput, Button, Text,
+  View, FlatList, StyleSheet, RefreshControl, Pressable, Modal, TextInput, Button, Text, Alert,
 } from 'react-native';
 import { Ionicons } from '@react-native-vector-icons/ionicons';
 import Header from '@/components/Header';
 import { colors, spacing } from '@/theme';
-import { PlainItem } from '@/components/plain';
-import { getPacientById, addSymptom, updateSymptom, deleteSymptom } from '@/crud/pacient';
-import { StorageService } from '@/services/StorageService';
+import { 
+  getCurrentPacient,  // ✅ Usar esta función
+  addSymptomByGroup, 
+  updateSymptomByGroup, 
+  deleteSymptomByGroup 
+} from '@/crud/pacient';
 
 type Sintoma = {
   id: string;
@@ -24,65 +27,74 @@ export default function SintomasScreen() {
   const [editingItem, setEditingItem] = useState<Sintoma | null>(null);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<Sintoma | null>(null);
-  const [pacientId, setPacientId] = useState<number | null>(null);
-
-  // Cargar pacient_id desde storage al inicializar
-  useEffect(() => {
-    const loadPacientId = async () => {
-      const id = await StorageService.getPacientId();
-      setPacientId(id);
-    };
-    loadPacientId();
-  }, []);
 
   const fetchSintomas = useCallback(async () => {
-    if (!pacientId) return;
-    
     setLoading(true);
     try {
-      const resp = await getPacientById(pacientId);
-      const raw = resp.data.symptoms || [];
-      const mapped = raw.map((it: any, idx: number) => ({
-        id: idx.toString(),
-        nombre: it.name || 'Síntoma',
-        descripcion: it.description || '',
-      }));
-      setItems(mapped);
+      console.log('🔍 Obteniendo síntomas...');
+      // ✅ Usar getCurrentPacient (no getPacientByGroupUuid)
+      const resp = await getCurrentPacient();
+      
+      if (resp.data) {
+        const raw = resp.data.symptoms || [];
+        const mapped = raw.map((it: any, idx: number) => ({
+          id: idx.toString(),
+          nombre: it.name || it.nombre || 'Síntoma',
+          descripcion: it.description || it.descripcion || '',
+        }));
+        setItems(mapped);
+        console.log('✅ Síntomas cargados:', mapped.length);
+      }
     } catch (err) {
-      console.error('Error al obtener síntomas:', err);
+      console.error('❌ Error al obtener síntomas:', err);
     } finally {
       setLoading(false);
     }
-  }, [pacientId]);
+  }, []);
 
   const handleCreateSintoma = async () => {
-    if (!pacientId) return;
+    if (!draftNombre.trim()) {
+      Alert.alert('Error', 'El nombre del síntoma es requerido');
+      return;
+    }
     
     try {
+      console.log('💾 Guardando síntoma:', { nombre: draftNombre, descripcion: draftDescripcion });
+      
       if (editingItem) {
-        // Update existing item
+        // ✅ No pasar groupUuid - las funciones *ByGroup lo obtienen internamente
         const sintomaData = {
-          name: draftNombre,
-          description: draftDescripcion,
+          name: draftNombre.trim(),
+          nombre: draftNombre.trim(),
+          description: draftDescripcion.trim(),
+          descripcion: draftDescripcion.trim(),
         };
-        await updateSymptom(pacientId, parseInt(editingItem.id), sintomaData);
+        await updateSymptomByGroup(parseInt(editingItem.id), sintomaData);
+        console.log('✅ Síntoma actualizado');
+        Alert.alert('Éxito', 'Síntoma actualizado correctamente');
       } else {
-        // Create new item
+        // ✅ No pasar groupUuid
         const sintomaData = {
-          name: draftNombre,
-          description: draftDescripcion,
+          name: draftNombre.trim(),
+          nombre: draftNombre.trim(),
+          description: draftDescripcion.trim(),
+          descripcion: draftDescripcion.trim(),
         };
-        await addSymptom(pacientId, sintomaData);
+        await addSymptomByGroup(sintomaData);
+        console.log('✅ Síntoma creado');
+        Alert.alert('Éxito', 'Síntoma creado correctamente');
       }
 
       resetModal();
       fetchSintomas();
-    } catch (e) {
-      console.error('Error guardando síntoma:', e);
+    } catch (e: any) {
+      console.error('❌ Error guardando síntoma:', e);
+      Alert.alert('Error', 'No se pudo guardar el síntoma');
     }
   };
 
   const handleEditSintoma = (item: Sintoma) => {
+    console.log('📝 Editando síntoma:', item);
     setEditingItem(item);
     setDraftNombre(item.nombre);
     setDraftDescripcion(item.descripcion || '');
@@ -90,22 +102,26 @@ export default function SintomasScreen() {
   };
 
   const handleDeleteSintoma = (item: Sintoma) => {
+    console.log('🗑️ Solicitando eliminación de:', item);
     setItemToDelete(item);
     setDeleteModalVisible(true);
   };
 
   const confirmDeleteSintoma = async () => {
-    if (!pacientId) return;
+    if (!itemToDelete) return;
     
     try {
-      if (itemToDelete) {
-        await deleteSymptom(pacientId, parseInt(itemToDelete.id));
-        setDeleteModalVisible(false);
-        setItemToDelete(null);
-        fetchSintomas();
-      }
-    } catch (e) {
-      console.error('Error eliminando síntoma:', e);
+      console.log('🗑️ Eliminando síntoma:', itemToDelete.nombre);
+      // ✅ No pasar groupUuid
+      await deleteSymptomByGroup(parseInt(itemToDelete.id));
+      setDeleteModalVisible(false);
+      setItemToDelete(null);
+      fetchSintomas();
+      console.log('✅ Síntoma eliminado');
+      Alert.alert('Éxito', 'Síntoma eliminado correctamente');
+    } catch (e: any) {
+      console.error('❌ Error eliminando síntoma:', e);
+      Alert.alert('Error', 'No se pudo eliminar el síntoma');
     }
   };
 
@@ -121,11 +137,11 @@ export default function SintomasScreen() {
     setEditingItem(null);
   };
 
-  useEffect(() => { 
-    if (pacientId) {
-      fetchSintomas();
-    }
-  }, [fetchSintomas, pacientId]);
+  // ✅ No depender de groupUuid
+  useEffect(() => {
+    console.log('🚀 Iniciando carga de síntomas...');
+    fetchSintomas();
+  }, [fetchSintomas]);
 
   return (
     <View style={styles.container}>
@@ -136,7 +152,10 @@ export default function SintomasScreen() {
         renderItem={({ item }) => (
           <Pressable
             style={styles.contextItem}
-            onPress={() => handleEditSintoma(item)}
+            onPress={() => {
+              console.log('📋 Item presionado:', item);
+              handleEditSintoma(item);
+            }}
             android_ripple={{ color: 'rgba(0,0,0,0.05)' }}
           >
             <View style={styles.contextContent}>
@@ -148,6 +167,7 @@ export default function SintomasScreen() {
                 style={styles.actionButton}
                 onPress={(e) => {
                   e.stopPropagation();
+                  console.log('✏️ Botón editar presionado:', item);
                   handleEditSintoma(item);
                 }}
                 android_ripple={{ color: 'rgba(0,0,0,0.1)', radius: 20 }}
@@ -158,6 +178,7 @@ export default function SintomasScreen() {
                 style={styles.actionButton}
                 onPress={(e) => {
                   e.stopPropagation();
+                  console.log('🗑️ Botón eliminar presionado:', item);
                   handleDeleteSintoma(item);
                 }}
                 android_ripple={{ color: 'rgba(255,0,0,0.1)', radius: 20 }}
@@ -172,31 +193,39 @@ export default function SintomasScreen() {
         }
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         contentContainerStyle={styles.listContent}
-        ListEmptyComponent={!loading ? <View style={styles.empty} /> : null}
+        ListEmptyComponent={
+          !loading ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>No hay síntomas registrados</Text>
+              <Text style={styles.emptySubtext}>Agrega tu primer síntoma usando el botón +</Text>
+            </View>
+          ) : null
+        }
       />
-      <Pressable style={styles.fab} onPress={() => setModalVisible(true)}>
+      
+      <Pressable
+        style={styles.fab}
+        onPress={() => {
+          console.log('➕ Botón agregar presionado');
+          setModalVisible(true);
+        }}
+      >
         <Ionicons name="add" size={26} color="#fff" />
       </Pressable>
 
-      <Modal
-        visible={modalVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={resetModal}
-      >
+      {/* Modales - usar los mismos estilos de InteresesScreen */}
+      <Modal visible={modalVisible} animationType="slide" transparent onRequestClose={resetModal}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
             <Text style={styles.modalTitle}>
               {editingItem ? 'Editar Síntoma' : 'Nuevo Síntoma'}
             </Text>
-
             <TextInput
               placeholder="Nombre"
               value={draftNombre}
               onChangeText={setDraftNombre}
               style={styles.input}
             />
-
             <TextInput
               placeholder="Descripción"
               value={draftDescripcion}
@@ -204,7 +233,6 @@ export default function SintomasScreen() {
               style={[styles.input, { height: 80 }]}
               multiline
             />
-
             <View style={styles.modalButtons}>
               <Button title="Cancelar" color="#888" onPress={resetModal} />
               <Button title={editingItem ? 'Actualizar' : 'Guardar'} onPress={handleCreateSintoma} />
@@ -213,12 +241,7 @@ export default function SintomasScreen() {
         </View>
       </Modal>
 
-      <Modal
-        visible={deleteModalVisible}
-        animationType="fade"
-        transparent
-        onRequestClose={cancelDelete}
-      >
+      <Modal visible={deleteModalVisible} animationType="fade" transparent onRequestClose={cancelDelete}>
         <View style={styles.modalOverlay}>
           <View style={styles.confirmModalContainer}>
             <Text style={styles.confirmTitle}>Confirmar eliminación</Text>
@@ -226,7 +249,6 @@ export default function SintomasScreen() {
               ¿Estás seguro de que deseas eliminar "{itemToDelete?.nombre}"?
             </Text>
             <Text style={styles.confirmSubtitle}>Esta acción no se puede deshacer.</Text>
-            
             <View style={styles.confirmButtons}>
               <Button title="Cancelar" color="#888" onPress={cancelDelete} />
               <Button title="Eliminar" color="#e74c3c" onPress={confirmDeleteSintoma} />
@@ -238,17 +260,19 @@ export default function SintomasScreen() {
   );
 }
 
+// ✅ Usar los mismos estilos de InteresesScreen
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.card },
   listContent: { paddingBottom: spacing.xl },
   separator: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.divider,
-    marginHorizontal: spacing.xl,
+    marginHorizontal: spacing.md,
   },
   contextItem: {
-    backgroundColor: colors.card,
+    backgroundColor: '#fff',
     padding: spacing.md,
+    marginHorizontal: spacing.md,
     marginBottom: spacing.sm,
     borderRadius: 8,
     borderWidth: StyleSheet.hairlineWidth,
@@ -256,6 +280,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    elevation: 1,
   },
   contextContent: {
     flex: 1,
@@ -268,7 +293,7 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   contextDescription: {
-    color: colors.text,
+    color: '#666',
     lineHeight: 20,
   },
   actionButtons: {
@@ -277,7 +302,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   actionButton: {
-    padding: spacing.xs,
+    padding: spacing.sm,
     borderRadius: 20,
     backgroundColor: 'rgba(0,0,0,0.05)',
     alignItems: 'center',
@@ -285,17 +310,39 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
   },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: spacing.xl * 2,
+  },
+  emptyText: {
+    fontSize: 18,
+    color: colors.text,
+    marginBottom: spacing.sm,
+    textAlign: 'center',
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+  },
   fab: {
     position: 'absolute',
     right: spacing.xl,
     bottom: spacing.xl,
-    width: 52, height: 52, borderRadius: 26,
-    alignItems: 'center', justifyContent: 'center',
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: colors.primary,
     elevation: 4,
-    shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 6, shadowOffset: { width: 0, height: 3 },
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
   },
-  empty: { height: spacing.xl },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.4)',
