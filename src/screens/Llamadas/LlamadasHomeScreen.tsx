@@ -1,21 +1,49 @@
 // src/screens/Llamadas/LlamadasHomeScreen.tsx
-import React from 'react';
-import {ScrollView, View, StyleSheet} from 'react-native';
+import React, {useRef, useCallback} from 'react';
+import {ScrollView, View, StyleSheet, Text, Pressable} from 'react-native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
-import {useNavigation} from '@react-navigation/native';
+import {useNavigation, useFocusEffect} from '@react-navigation/native';
 import Header from '@/components/Header';
 import CardRow from '@/components/CardRow';
 import {colors, spacing} from '@/theme';
 import {LlamadaStackParamList} from '@/navigation/types';
+import { useMicPermissionOnLaunch } from '@/permissions/useMicPermission';
+import { RESULTS } from 'react-native-permissions';
 
 type Nav = NativeStackNavigationProp<LlamadaStackParamList>;
 
 export default function LlamadasHomeScreen() {
   const navigation = useNavigation<Nav>();
+  const { ensureMicPermission, status, micGranted } = useMicPermissionOnLaunch();
+  const askedRef = useRef(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (askedRef.current) return;
+      askedRef.current = true;
+      void ensureMicPermission();  // dispara check + request
+    }, [ensureMicPermission])
+  );
 
   return (
     <View style={styles.container}>
-      <Header title="Llamadas" onInfoPress={() => { /* abrir modal info */ }} />
+      <Header title="Llamadas" onInfoPress={() => {}} />
+
+      {/* Panel debug permiso (puedes quitarlo cuando confirmes) */}
+      <View style={styles.permBox}>
+        <Text style={{fontWeight:'700'}}>Micrófono: {status ?? '—'}</Text>
+        {!micGranted && (
+          <Pressable style={styles.permBtn} onPress={()=>void ensureMicPermission()}>
+            <Text style={{color:'#fff', fontWeight:'700'}}>Solicitar permiso</Text>
+          </Pressable>
+        )}
+        {status === RESULTS.BLOCKED && (
+          <Text style={{marginTop:6, color:'#b91c1c'}}>
+            El permiso está bloqueado; abre Ajustes desde el diálogo.
+          </Text>
+        )}
+      </View>
+
       <ScrollView contentContainerStyle={styles.content}>
         <CardRow
           variant='primary'
@@ -53,4 +81,19 @@ export default function LlamadasHomeScreen() {
 const styles = StyleSheet.create({
   container: {flex: 1, backgroundColor: colors.background},
   content: {padding: spacing.xl},
+  permBox: {
+    marginHorizontal: spacing.xl,
+    marginTop: spacing.md,
+    backgroundColor:'#fff',
+    borderRadius:12,
+    padding: spacing.md,
+    elevation:2
+  },
+  permBtn: {
+    marginTop:8,
+    backgroundColor: colors.primary,
+    paddingVertical:8,
+    paddingHorizontal:12,
+    borderRadius:8
+  }
 });

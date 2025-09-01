@@ -14,7 +14,24 @@ buildscript {
     dependencies {
         classpath("com.android.tools.build:gradle")
         classpath("com.facebook.react:react-native-gradle-plugin")
-        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion")
+    }
+}
+
+subprojects { subproject ->
+    afterEvaluate {
+        def hasKotlin =
+                subproject.plugins.hasPlugin('org.jetbrains.kotlin.android') ||
+                subproject.plugins.hasPlugin('kotlin-android')
+
+        if (hasKotlin) {
+            // Para Gradle 8 / Kotlin plugin
+            subproject.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach { t ->
+                t.kotlinOptions {
+                    jvmTarget = '17'
+                }
+            }
+        }
     }
 }
 

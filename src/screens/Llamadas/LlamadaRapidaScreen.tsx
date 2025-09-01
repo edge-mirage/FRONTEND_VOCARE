@@ -1,231 +1,257 @@
 // src/screens/Llamadas/LlamadaRapidaScreen.tsx
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { View, Text, StyleSheet, Pressable, TextInput, ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Ionicons } from '@react-native-vector-icons/ionicons';
+
 import Header from '@/components/Header';
-import ListItem from '@/components/ListItem';
 import { colors, spacing } from '@/theme';
-import { getAuthToken } from '@/services/auth';
+import { DURATION_OPTIONS } from '@/domain/schedule/options';
+import type { LlamadaStackParamList } from '@/navigation/types';
 
-const API_BASE_URL = 'http://192.168.1.5:8000';
+// ====== MOCKS (reemplazar luego por fetch al backend) ======
+const MOCK_CONTEXTS = [
+  { id: 'c1', label: 'Conversación rutinaria y casual' },
+  { id: 'c2', label: 'Preguntar por su salud y cómo se ha sentido' },
+  { id: 'c3', label: 'Intereses recientes y actividades de la semana' },
+  { id: 'c4', label: 'Eventos próximos y recordatorios' },
+];
 
-type Contexto = {
-  id: number;
-  name: string;
-  description: string;
-  prompt: string;
-};
+const MOCK_VOICES = [
+  { id: 'v1', nombre: 'Camila' },
+  { id: 'v2', nombre: 'Marco' },
+  { id: 'v3', nombre: 'María' },
+  { id: 'v4', nombre: 'Andrés' },
+];
+// ===========================================================
 
-type Voz = {
-  id: string;
-  name: string;
-};
+type Nav = NativeStackNavigationProp<LlamadaStackParamList, 'LlamadaRapida'>;
 
-export default function LlamadaRapidaScreen() {
-  const navigation = useNavigation();
-  const [contextos, setContextos] = useState<Contexto[]>([]);
-  const [voces, setVoces] = useState<Voz[]>([]);
-  const [contextoSeleccionado, setContextoSeleccionado] = useState<Contexto | null>(null);
-  const [vozSeleccionada, setVozSeleccionada] = useState<Voz | null>(null);
-  const [duracion, setDuracion] = useState(10);
-  const [contextoPersonalizado, setContextoPersonalizado] = useState('');
+export default function LlamadaRaoudaScreen() {
+  const navigation = useNavigation<Nav>();
 
-  useEffect(() => {
-    cargarContextos();
-    cargarVoces();
-  }, []);
+  const [contextText, setContextText] = useState('');
+  const [contextId, setContextId] = useState<string | undefined>();
+  const [showContextList, setShowContextList] = useState(false);
 
-  const cargarContextos = async () => {
-    try {
-      const token = await getAuthToken();
-      const response = await fetch(`${API_BASE_URL}/contexts`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setContextos(data);
-      }
-    } catch (error) {
-      console.error('Error cargando contextos:', error);
-    }
-  };
+  const [voiceId, setVoiceId] = useState<string | undefined>();
+  const [showVoiceList, setShowVoiceList] = useState(false);
 
-  const cargarVoces = async () => {
-    setVoces([
-      { id: 'voz1', name: 'Voz Suave' },
-      { id: 'voz2', name: 'Voz Alegre' },
-      { id: 'voz3', name: 'Voz Seria' },
-    ]);
-  };
+  const [durationMin, setDurationMin] = useState<number>(10);
 
-  const iniciarLlamadaRapida = async () => {
-    try {
-      const token = await getAuthToken();
-      const contexto = contextoSeleccionado ? contextoSeleccionado.prompt : contextoPersonalizado;
-      
-      const response = await fetch(`${API_BASE_URL}/llamadas/rapida`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contexto,
-          voz_id: vozSeleccionada?.id,
-          duracion_min: duracion,
-        }),
-      });
+  const voiceLabel = useMemo(
+    () => (voiceId ? MOCK_VOICES.find(v => v.id === voiceId)?.nombre : undefined),
+    [voiceId]
+  );
 
-      if (response.ok) {
-        navigation.navigate('LlamadaEnCurso', {
-          contexto,
-          voz: vozSeleccionada,
-          duracion,
-        });
-      } else {
-        Alert.alert('Error', 'No se pudo iniciar la llamada');
-      }
-    } catch (error) {
-      console.error('Error iniciando llamada:', error);
-      Alert.alert('Error', 'No se pudo iniciar la llamada');
-    }
+  const startCall = () => {
+    navigation.navigate('LlamadaInstantanea', { voiceName: voiceLabel ?? 'Voz replicada' });
   };
 
   return (
-    <View style={styles.container}>
-      <Header title="Llamada Rápida" showBackButton />
-      
-      <ScrollView style={styles.scrollView}>
-        <Text style={styles.seccionTitulo}>Contexto</Text>
-        <TextInput
-          style={styles.textInput}
-          placeholder="Escribe un contexto personalizado..."
-          value={contextoPersonalizado}
-          onChangeText={setContextoPersonalizado}
-          multiline
-          numberOfLines={4}
-        />
-        
-        <Text style={styles.seccionTitulo}>O selecciona un contexto predefinido</Text>
-        {contextos.map((contexto) => (
-          <ListItem
-            key={contexto.id}
-            title={contexto.name}
-            subtitle={contexto.description}
-            onPress={() => setContextoSeleccionado(contexto)}
-            right={
-              contextoSeleccionado?.id === contexto.id ? (
-                <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
-              ) : null
-            }
-          />
-        ))}
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <Header title="Llamada Rápida" />
 
-        <Text style={styles.seccionTitulo}>Voz replicada</Text>
-        {voces.map((voz) => (
-          <ListItem
-            key={voz.id}
-            title={voz.name}
-            onPress={() => setVozSeleccionada(voz)}
-            right={
-              vozSeleccionada?.id === voz.id ? (
-                <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
-              ) : null
-            }
-          />
-        ))}
-
-        <Text style={styles.seccionTitulo}>Duración aproximada</Text>
-        <View style={styles.duracionContainer}>
-          {[5, 10, 15, 20].map((min) => (
-            <Pressable
-              key={min}
-              style={[
-                styles.duracionBoton,
-                duracion === min && styles.duracionBotonSeleccionado,
-              ]}
-              onPress={() => setDuracion(min)}
-            >
-              <Text
-                style={[
-                  styles.duracionTexto,
-                  duracion === min && styles.duracionTextoSeleccionado,
-                ]}
-              >
-                {min} min
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-
-        <Pressable style={styles.botonIniciar} onPress={iniciarLlamadaRapida}>
-          <Text style={styles.botonIniciarTexto}>Iniciar Llamada</Text>
+      <ScrollView contentContainerStyle={styles.body}>
+        {/* Botón grande de llamada */}
+        <Pressable onPress={startCall} style={styles.bigCallBtn}>
+          <Ionicons name="call" size={72} color="#fff" />
         </Pressable>
+
+        {/* Tarjeta con campos */}
+        <View style={styles.card}>
+          {/* Contexto */}
+          <Text style={styles.fieldLabel}>Contexto</Text>
+          <View style={styles.contextRow}>
+            <View style={styles.inputWrap}>
+              <TextInput
+                value={contextText}
+                onChangeText={(t) => { setContextText(t); setContextId(undefined); }}
+                placeholder="Escriba o seleccione el contexto para esta llamada."
+                placeholderTextColor="#9CA3AF"
+                style={styles.textInput}
+                multiline
+              />
+              <Pressable onPress={() => setShowContextList(v => !v)} style={styles.inlineButton}>
+                <Ionicons name="chevron-down" size={18} color={colors.text} />
+              </Pressable>
+            </View>
+
+            <Pressable onPress={() => { /* TODO: dictado por voz si aplica */ }} style={styles.roundSideBtn}>
+              <Ionicons name="mic-outline" size={18} color="#fff" />
+            </Pressable>
+          </View>
+
+          {showContextList && (
+            <View style={styles.dropdown}>
+              {MOCK_CONTEXTS.map(c => (
+                <Pressable
+                  key={c.id}
+                  onPress={() => { setContextId(c.id); setContextText(c.label); setShowContextList(false); }}
+                  style={styles.dropdownItem}
+                >
+                  <Text style={styles.dropdownText}>{c.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+
+          {/* Voz replicada */}
+          <Text style={styles.fieldLabel}>Voz replicada</Text>
+          <Pressable style={styles.selectRow} onPress={() => setShowVoiceList(v => !v)}>
+            <Text style={voiceLabel ? styles.selectValue : styles.selectPlaceholder}>
+              {voiceLabel ?? 'Seleccione una voz replicada a usar'}
+            </Text>
+            <Ionicons name="chevron-down" size={18} color={colors.text} />
+          </Pressable>
+
+          {showVoiceList && (
+            <View style={styles.dropdown}>
+              {MOCK_VOICES.map(v => (
+                <Pressable
+                  key={v.id}
+                  onPress={() => { setVoiceId(v.id); setShowVoiceList(false); }}
+                  style={styles.dropdownItem}
+                >
+                  <Text style={styles.dropdownText}>{v.nombre}</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+
+          {/* Duración */}
+          <Text style={styles.fieldLabel}>Duración aproximada</Text>
+          <View style={styles.chipsRow}>
+            {DURATION_OPTIONS.map(m => {
+              const on = durationMin === m;
+              return (
+                <Pressable key={m} onPress={() => setDurationMin(m)} style={[styles.chip, on && styles.chipOn]}>
+                  <Text style={[styles.chipText, on && styles.chipTextOn]}>{m} min</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
       </ScrollView>
     </View>
   );
 }
 
+const CARD_BG = '#F5D8FF';
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
+  body: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xxl,
   },
-  scrollView: {
-    padding: spacing.lg,
-  },
-  seccionTitulo: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: spacing.md,
-    color: colors.text,
-  },
-  textInput: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    padding: spacing.md,
+  bigCallBtn: {
+    alignSelf: 'center',
+    marginTop: spacing.xl,
     marginBottom: spacing.lg,
-    minHeight: 100,
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+  },
+
+  card: {
+    backgroundColor: CARD_BG,
+    borderRadius: 20,
+    padding: spacing.lg,
+    gap: spacing.sm,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+  },
+
+  fieldLabel: {
+    fontWeight: '700',
+    color: colors.text,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+
+  // Contexto input + botones
+  contextRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  inputWrap: { flex: 1, position: 'relative' },
+  textInput: {
+    minHeight: 48,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    paddingRight: 44, // espacio para el chevron
+    color: colors.text,
     textAlignVertical: 'top',
   },
-  duracionContainer: {
+  inlineButton: {
+    position: 'absolute',
+    right: 6,
+    top: 6,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  roundSideBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // Select de voz
+  selectRow: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: spacing.xl,
-  },
-  duracionBoton: {
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    borderRadius: 8,
-    minWidth: 70,
     alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  duracionBotonSeleccionado: {
-    backgroundColor: colors.primary,
+  selectPlaceholder: { color: '#9CA3AF' },
+  selectValue: { color: colors.text, fontWeight: '600' },
+
+  // Dropdown reutilizable
+  dropdown: {
+    marginTop: 6,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    overflow: 'hidden',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
   },
-  duracionTexto: {
-    color: colors.primary,
-    fontWeight: '600',
+  dropdownItem: {
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#eee',
   },
-  duracionTextoSeleccionado: {
-    color: 'white',
-  },
-  botonIniciar: {
-    backgroundColor: colors.primary,
-    padding: spacing.lg,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: spacing.xl,
-  },
-  botonIniciarTexto: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
+  dropdownText: { color: colors.text },
+
+  // Chips de duración
+  chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: spacing.sm },
+  chip: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, backgroundColor: '#F3F4F6' },
+  chipOn: { backgroundColor: colors.primary },
+  chipText: { color: '#4B5563', fontWeight: '600' },
+  chipTextOn: { color: '#fff' },
 });

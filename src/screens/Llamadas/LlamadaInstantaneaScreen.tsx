@@ -1,71 +1,92 @@
 // src/screens/Llamadas/LlamadaInstantaneaScreen.tsx
-import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, Alert } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import Header from '@/components/Header';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, Pressable, BackHandler, Platform } from 'react-native';
+import { useNavigation, useRoute, RouteProp, CommonActions } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Ionicons } from '@react-native-vector-icons/ionicons';
 import { colors, spacing } from '@/theme';
-import { getAuthToken } from '@/services/auth';
+import type { LlamadaStackParamList } from '@/navigation/types';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const API_BASE_URL = 'http://192.168.1.5:8000';
+type Nav = NativeStackNavigationProp<LlamadaStackParamList, 'LlamadaInstantanea'>;
+type Rt  = RouteProp<LlamadaStackParamList, 'LlamadaInstantanea'>;
 
 export default function LlamadaInstantaneaScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<Nav>();
+  const { params } = useRoute<Rt>();
+  const insets = useSafeAreaInsets();
+  const who = params?.voiceName ?? 'Voz replicada';  // ← nombre mostrado
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const resetToCallsHomeAndExit = () => {
+    navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'LlamadaHome' }] }));
+    navigation.getParent()?.navigate('LlamadasTab');
+    if (Platform.OS === 'android') setTimeout(() => BackHandler.exitApp(), 30);
+  };
 
   useEffect(() => {
-    iniciarLlamadaInstantanea();
+    timerRef.current = setTimeout(resetToCallsHomeAndExit, 20_000);
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      resetToCallsHomeAndExit();
+      return true;
+    });
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      sub.remove();
+    };
   }, []);
 
-  const iniciarLlamadaInstantanea = async () => {
-    try {
-      const token = await getAuthToken();
-      const response = await fetch(`${API_BASE_URL}/llamadas/instantanea`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        navigation.navigate('LlamadaEnCurso', {
-          contexto: ' contexto predeterminado',
-          voz: { id: 'default', name: 'Voz Predeterminada' },
-          duracion: 15,
-        });
-      } else {
-        Alert.alert('Error', 'No se pudo iniciar la llamada instantánea');
-        navigation.goBack();
-      }
-    } catch (error) {
-      console.error('Error iniciando llamada instantánea:', error);
-      Alert.alert('Error', 'No se pudo iniciar la llamada instantánea');
-      navigation.goBack();
-    }
+  const answer = () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    navigation.replace('LlamadaActiva', { voiceName: who }); // ← pasa la voz a la siguiente
   };
+
+  const decline = () => resetToCallsHomeAndExit();
 
   return (
     <View style={styles.container}>
-      <Header title="Llamada Instantánea" showBackButton onBackPress={() => navigation.goBack()} />
-      <View style={styles.content}>
-        <Text style={styles.mensaje}>Iniciando llamada instantánea...</Text>
+      <Text style={styles.title}>Llamada entrante</Text>
+      <Text style={styles.number}>{who}</Text>
+
+      <View style={{ height: 28 }} />
+
+      <View style={styles.avatar}>
+        <Ionicons name="person" size={80} color={colors.primary} />
+      </View>
+
+      <View style={{ flex: 1 }} />
+
+      <View style={[styles.actions, { bottom: insets.bottom + 80 }]}>
+        <Pressable style={[styles.roundBtn, styles.decline]} onPress={decline}>
+          <Ionicons name="call" size={24} color="#fff" style={{ transform: [{ rotate: '135deg' }] }} />
+        </Pressable>
+        <Pressable style={[styles.roundBtn, styles.answer]} onPress={answer}>
+          <Ionicons name="call" size={24} color="#fff" />
+        </Pressable>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
+  container: { flex: 1, backgroundColor: '#FBEAF7', alignItems: 'center', paddingTop: spacing.xl, paddingHorizontal: spacing.xl },
+  title: { color: colors.textMuted, marginBottom: 6, fontWeight: '600' },
+  number: { color: colors.text, fontWeight: '800', fontSize: 20 },
+  avatar: {
+    width: 160, height: 160, borderRadius: 80,
+    borderWidth: 10, borderColor: colors.primary, backgroundColor: '#fff',
+    alignItems: 'center', justifyContent: 'center',
   },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.xl,
+  actions: {
+    position: 'absolute', left: 0, right: 0,
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
+    gap: spacing.xl,
   },
-  mensaje: {
-    fontSize: 18,
-    color: colors.text,
-    textAlign: 'center',
+  roundBtn: {
+    width: 64, height: 64, borderRadius: 32,
+    alignItems: 'center', justifyContent: 'center',
+    elevation: 3, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 6, shadowOffset: { width: 0, height: 3 },
   },
+  decline: { backgroundColor: '#EF4444' },
+  answer:  { backgroundColor: '#22C55E' },
 });
