@@ -59,5 +59,5 @@ export type RootStackParamList = {
   };
   MainTabs: undefined;
   HomeStack: undefined;
-  RegistroStack: undefined;
+  Registro: undefined;
 };

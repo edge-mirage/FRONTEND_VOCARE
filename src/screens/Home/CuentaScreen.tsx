@@ -10,6 +10,8 @@ export default function CuentaScreen() {
   const { user, checkAuthState } = useAuth();
 
   const handleLogout = () => {
+    console.log('🔵 [LOGOUT] handleLogout fue llamado'); // ✅ Agregar este log
+    
     Alert.alert(
       'Cerrar Sesión',
       '¿Estás seguro de que quieres cerrar sesión?',
@@ -19,12 +21,17 @@ export default function CuentaScreen() {
           text: 'Cerrar Sesión',
           style: 'destructive',
           onPress: async () => {
+            console.log('🔵 [LOGOUT] Botón "Cerrar Sesión" presionado'); // ✅ Agregar este log
             try {
+              console.log('🔵 [LOGOUT] Llamando logoutAccess...'); // ✅ Agregar este log
               await logoutAccess();
-              // Actualizar el contexto de autenticación
+              console.log('🔵 [LOGOUT] logoutAccess completado'); // ✅ Agregar este log
+              
+              console.log('🔵 [LOGOUT] Llamando checkAuthState...'); // ✅ Agregar este log
               await checkAuthState();
+              console.log('🔵 [LOGOUT] checkAuthState completado'); // ✅ Agregar este log
             } catch (error) {
-              console.error('Error logging out:', error);
+              console.error('❌ [LOGOUT] Error:', error);
             }
           },
         },
@@ -51,7 +58,10 @@ export default function CuentaScreen() {
             styles.logoutButton,
             pressed && { opacity: 0.8 },
           ]}
-          onPress={handleLogout}
+          onPress={() => {
+            console.log('🟢 [LOGOUT] Pressable fue presionado'); // ✅ Agregar este log
+            handleLogout();
+          }}
         >
           <Text style={styles.logoutButtonText}>Cerrar Sesión</Text>
         </Pressable>

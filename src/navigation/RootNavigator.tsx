@@ -8,6 +8,7 @@ import HomeStack from './HomeStack';
 import LoginScreen from '@/screens/Login/login';
 import RecoverPasswordScreen from '@/screens/Login/RecoverPasswordScreen';
 import VerifyCodeScreen from '@/screens/Login/VerifyCodeScreen';
+import RegistroScreen from '@/screens/Registro/RegistroScreen';
 import { ActivityIndicator, View } from 'react-native';
 import { colors } from '@/theme';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
@@ -39,6 +40,14 @@ function AppNavigator() {
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="RecoverPassword" component={RecoverPasswordScreen} />
             <Stack.Screen name="VerifyCode" component={VerifyCodeScreen} />
+            <Stack.Screen 
+              name="Registro" 
+              component={RegistroScreen}
+              options={{
+                title: 'Crear Cuenta',
+                headerShown: false, // Usa tu Header personalizado
+              }}
+            />
           </>
         )}
       </Stack.Navigator>

@@ -181,6 +181,10 @@ export default function LoginScreen({ navigation }: any) {
     navigation.navigate('RecoverPassword');
   };
 
+  const handleRegister = () => {
+    navigation.navigate('Registro');
+  };
+
   return (
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: colors.card }}
@@ -261,6 +265,18 @@ export default function LoginScreen({ navigation }: any) {
         >
           <Text style={styles.forgotPasswordText}>¿Olvidaste tu contraseña?</Text>
         </Pressable>
+
+        {/* ✅ NUEVO: Botón para ir al registro */}
+        <View style={styles.registerContainer}>
+          <Text style={styles.registerPrompt}>¿No tienes cuenta?</Text>
+          <Pressable
+            style={styles.registerButton}
+            onPress={handleRegister}
+            disabled={loading}
+          >
+            <Text style={styles.registerButtonText}>Crear cuenta</Text>
+          </Pressable>
+        </View>
         
         {/* ✅ Información adicional para usuarios bloqueados */}
         {isBlocked && (
@@ -390,5 +406,33 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6c757d',
     lineHeight: 20,
+  },
+  // ✅ NUEVOS ESTILOS PARA REGISTRO
+  registerContainer: {
+    marginTop: spacing.xl,
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.divider,
+  },
+  registerPrompt: {
+    fontSize: 16,
+    color: colors.text,
+    marginBottom: spacing.sm,
+  },
+  registerButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: colors.primary,
+    borderRadius: 6,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    minWidth: 140,
+    alignItems: 'center',
+  },
+  registerButtonText: {
+    color: colors.primary,
+    fontWeight: 'bold',
+    fontSize: 16,
   },
 });

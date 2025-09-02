@@ -358,42 +358,259 @@ export async function changePassword(body: ChangePasswordBody): Promise<void> {
   });
 }
 
-export async function logoutAccess(): Promise<void> {
-  try {
-    await api.post('/auth/logout/access');
-  } finally {
-    await clearSession();
-  }
+// ✅ AGREGAR ESTAS INTERFACES AL FINAL
+export interface RegisterBody {
+  name: string;
+  email: string;
+  password: string;
+  relationship: string;
+  group_uuid?: string | null;
 }
 
-export async function logoutRefresh(): Promise<void> {
-  try {
-    const refresh = await getRefreshToken();
-    if (refresh) {
-      await axios.post(`${BASE_URL}/auth/logout/refresh`, null, {
-        headers: { Authorization: `Bearer ${refresh}` },
-      });
-    }
-  } finally {
-    await clearSession();
-  }
+export interface VerifyEmailBody {
+  email: string;
+  code: string;
 }
 
-// ===== Refresh interno =====
-async function doRefresh(): Promise<{ access_token: string; refresh_token: string } | null> {
-  const refresh = await getRefreshToken();
-  if (!refresh) return null;
+export interface ResendVerificationBody {
+  email: string;
+}
 
-  const { data } = await axios.post<TokenPairResponse>(`${BASE_URL}/auth/refresh`, null, {
-    headers: { Authorization: `Bearer ${refresh}` },
+// ✅ FUNCIÓN DE REGISTRO
+export async function register(body: RegisterBody): Promise<any> {
+  console.log('🌐 [REGISTER API] Enviando request a:', `${BASE_URL}/auth/register`);
+  console.log('📤 [REGISTER API] Body:', { 
+    ...body, 
+    password: '***' 
   });
+  
+  try {
+    const response = await axios.post(`${BASE_URL}/auth/register`, body, {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 15000,
+    });
+    
+    console.log('✅ [REGISTER API] Response status:', response.status);
+    console.log('✅ [REGISTER API] Response data:', response.data);
+    
+    return response.data;
+    
+  } catch (error: any) {
+    console.error('❌ [REGISTER API] Error:', error);
+    
+    if (axios.isAxiosError(error)) {
+      const errorMessage = error.response?.data?.detail || error.response?.data?.message || 'Error en el registro';
+      
+      if (error.response?.status === 409) {
+        throw new Error('El email ya está registrado');
+      } else if (error.response?.status === 404) {
+        throw new Error('El código de grupo familiar no es válido');
+      } else if (error.response?.status === 400) {
+        if (errorMessage.includes('email ya está registrado')) {
+          throw new Error('El email ya está registrado');
+        } else if (errorMessage.includes('código de grupo familiar')) {
+          throw new Error('El código de grupo familiar no es válido');
+        } else if (errorMessage.includes('Relación no válida')) {
+          throw new Error('Relación familiar no válida. Selecciona una opción válida.');
+        }
+        throw new Error(errorMessage);
+      }
+      
+      throw new Error(errorMessage);
+    }
+    
+    throw error;
+  }
+}
 
-  // guardamos nuevos tokens
-  await AsyncStorage.multiSet([
-    [ACCESS_KEY, data.access_token],
-    [REFRESH_KEY, data.refresh_token],
-  ]);
-  return { access_token: data.access_token, refresh_token: data.refresh_token };
+// ✅ FUNCIÓN DE VERIFICACIÓN DE EMAIL
+export async function verifyEmail(body: VerifyEmailBody): Promise<any> {
+  console.log('🌐 [VERIFY EMAIL API] Enviando request a:', `${BASE_URL}/users/verify-email`);
+  console.log('📤 [VERIFY EMAIL API] Body:', body);
+  
+  try {
+    const response = await axios.post(`${BASE_URL}/users/verify-email`, body, {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 10000,
+    });
+    
+    console.log('✅ [VERIFY EMAIL API] Response:', response.data);
+    return response.data;
+    
+  } catch (error: any) {
+    console.error('❌ [VERIFY EMAIL API] Error:', error);
+    
+    if (axios.isAxiosError(error)) {
+      const errorMessage = error.response?.data?.detail || 'Código de verificación inválido';
+      
+      if (error.response?.status === 400) {
+        if (errorMessage.includes('inválido') || errorMessage.includes('expirado')) {
+          throw new Error('Código de verificación inválido o expirado');
+        }
+        throw new Error(errorMessage);
+      } else if (error.response?.status === 404) {
+        throw new Error('Usuario no encontrado');
+      }
+      
+      throw new Error(errorMessage);
+    }
+    
+    throw error;
+  }
+}
+
+// ✅ FUNCIÓN DE REENVÍO DE CÓDIGO
+export async function resendVerification(body: ResendVerificationBody): Promise<any> {
+  console.log('🌐 [RESEND VERIFICATION API] Enviando request a:', `${BASE_URL}/users/resend-verification`);
+  console.log('📤 [RESEND VERIFICATION API] Body:', body);
+  
+  try {
+    const response = await axios.post(`${BASE_URL}/users/resend-verification`, body, {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 10000,
+    });
+    
+    console.log('✅ [RESEND VERIFICATION API] Response:', response.data);
+    return response.data;
+    
+  } catch (error: any) {
+    console.error('❌ [RESEND VERIFICATION API] Error:', error);
+    
+    if (axios.isAxiosError(error)) {
+      const errorMessage = error.response?.data?.detail || 'Error reenviando código';
+      
+      if (error.response?.status === 404) {
+        throw new Error('Usuario no encontrado');
+      } else if (error.response?.status === 400) {
+        if (errorMessage.includes('ya está verificado')) {
+          throw new Error('El email ya está verificado');
+        }
+        throw new Error(errorMessage);
+      }
+      
+      throw new Error(errorMessage);
+    }
+    
+    throw error;
+  }
+}
+
+// ✅ FUNCIÓN DE LOGOUT (si no existe)
+export async function logoutAccess(): Promise<any> {
+  console.log('🌐 [LOGOUT API] Enviando request a:', `${BASE_URL}/auth/logout/access`);
+  
+  try {
+    const token = await StorageService.getAccessToken();
+    
+    if (!token) {
+      console.log('⚠️ [LOGOUT API] No hay token para hacer logout');
+      return { message: 'No hay sesión activa' };
+    }
+    
+    const response = await axios.post(`${BASE_URL}/auth/logout/access`, {}, {
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      timeout: 10000,
+    });
+    
+    console.log('✅ [LOGOUT API] Response:', response.data);
+    
+    // Limpiar tokens localmente
+    await StorageService.removeAccessToken();
+    await StorageService.removeRefreshToken();
+    
+    return response.data;
+    
+  } catch (error: any) {
+    console.error('❌ [LOGOUT API] Error:', error);
+    
+    // Aún si falla el logout del servidor, limpiar tokens localmente
+    try {
+      await StorageService.removeAccessToken();
+      await StorageService.removeRefreshToken();
+      console.log('✅ [LOGOUT API] Tokens locales limpiados');
+    } catch (storageError) {
+      console.error('❌ [LOGOUT API] Error limpiando storage:', storageError);
+    }
+    
+    if (axios.isAxiosError(error)) {
+      const errorMessage = error.response?.data?.detail || 'Error cerrando sesión';
+      throw new Error(errorMessage);
+    }
+    
+    throw error;
+  }
+}
+
+// ✅ FUNCIÓN DE VERIFICACIÓN DE TOKEN (si no existe)
+export async function verifyToken(): Promise<any> {
+  console.log('🌐 [VERIFY TOKEN API] Enviando request a:', `${BASE_URL}/auth/verify-token`);
+  
+  try {
+    const token = await StorageService.getAccessToken();
+    
+    if (!token) {
+      throw new Error('No hay token para verificar');
+    }
+    
+    const response = await axios.post(`${BASE_URL}/auth/verify-token`, {}, {
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      timeout: 5000,
+    });
+    
+    console.log('✅ [VERIFY TOKEN API] Token válido');
+    return response.data;
+    
+  } catch (error: any) {
+    console.error('❌ [VERIFY TOKEN API] Token inválido:', error);
+    
+    if (axios.isAxiosError(error)) {
+      const errorMessage = error.response?.data?.detail || 'Token inválido';
+      throw new Error(errorMessage);
+    }
+    
+    throw error;
+  }
+}
+
+// ✅ FUNCIÓN DE RECUPERAR CONTRASEÑA (si no existe)
+export interface RecoverPasswordBody {
+  email: string;
+}
+
+export async function recoverPassword(body: RecoverPasswordBody): Promise<any> {
+  console.log('🌐 [RECOVER PASSWORD API] Enviando request a:', `${BASE_URL}/users/recover-password`);
+  console.log('📤 [RECOVER PASSWORD API] Body:', body);
+  
+  try {
+    const response = await axios.post(`${BASE_URL}/users/recover-password`, body, {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 10000,
+    });
+    
+    console.log('✅ [RECOVER PASSWORD API] Response:', response.data);
+    return response.data;
+    
+  } catch (error: any) {
+    console.error('❌ [RECOVER PASSWORD API] Error:', error);
+    
+    if (axios.isAxiosError(error)) {
+      const errorMessage = error.response?.data?.detail || 'Error enviando código de recuperación';
+      
+      if (error.response?.status === 404) {
+        throw new Error('Email no encontrado');
+      }
+      
+      throw new Error(errorMessage);
+    }
+    
+    throw error;
+  }
 }
 
 export default api;
