@@ -60,31 +60,26 @@ export const eliminarContextoGrupo = async (grupo_uuid: UUID) => {
 
 // ================= FAMILY GROUP CONTEXT ITEM =================
 export const crearContextItem = async (data: any) => {
-  const res = await axios.post(`${URL}/family-group-context-items`, data);
+  const res = await axios.post(`${URL}/family-group-context-items/`, data);
   return res.data;
 };
 
 export const obtenerTodosContextItems = async () => {
-  const res = await axios.get(`${URL}/family-group-context-items`);
+  const res = await axios.get(`${URL}/family-group-context-items/`);
   return res.data;
 };
 
 export const obtenerContextItem = async (item_id: number) => {
-  const res = await axios.get(`${URL}/family-group-context-items/${item_id}`);
-  return res.data;
-};
-
-export const obtenerItemsPorContexto = async (context_id: number) => {
-  const res = await axios.get(`${URL}/family-group-context-items/context/${context_id}`);
+  const res = await axios.get(`${URL}/family-group-context-items/${item_id}/`);
   return res.data;
 };
 
 export const actualizarContextItem = async (item_id: number, data: any) => {
-  const res = await axios.put(`${URL}/family-group-context-items/${item_id}`, data);
+  const res = await axios.put(`${URL}/family-group-context-items/${item_id}/`, data);
   return res.data;
 };
 
 export const eliminarContextItem = async (item_id: number) => {
-  const res = await axios.delete(`${URL}/family-group-context-items/${item_id}`);
+  const res = await axios.delete(`${URL}/family-group-context-items/${item_id}/`);
   return res.data;
 };

@@ -1,13 +1,14 @@
 // src/screens/Llamadas/ContextosScreen.tsx       
 import React, { useEffect, useState, useCallback } from 'react';
 import {
-  View, Text, FlatList, ActivityIndicator, Pressable, Modal, TextInput, Button, StyleSheet, RefreshControl
+  View, Text, FlatList, ActivityIndicator, Pressable, Modal, TextInput, Button, StyleSheet, RefreshControl, Alert
 } from 'react-native';
 import { Ionicons } from '@react-native-vector-icons/ionicons';
 import Header from '@/components/Header';
 import { colors, spacing } from '@/theme';
 import { obtenerContextoPorGrupo, crearContextItem, actualizarContextItem, eliminarContextItem } from '@/crud/family';
 import { StorageService } from '@/services/StorageService';
+import NetInfo from '@react-native-community/netinfo';
 
 interface ContextItem {
   id: number;
@@ -36,45 +37,93 @@ export default function ContextosScreen() {
     loadGrupoUuid();
   }, []);
 
+  const checkInternetConnection = async (): Promise<boolean> => {
+    const netInfoState = await NetInfo.fetch();
+    return netInfoState.isConnected ?? false;
+  };
+
   const fetchContextos = useCallback(async () => {
     if (!grupoUuid) return;
+    
+    // ✅ Verificar conexión
+    const isConnected = await checkInternetConnection();
+    if (!isConnected) {
+      Alert.alert(
+        '❌ Sin Conexión', 
+        'Debes estar conectado a internet para cargar los contextos.',
+        [{ text: 'Entendido' }]
+      );
+      return;
+    }
     
     try {
       setLoading(true);
       const contexto = await obtenerContextoPorGrupo(grupoUuid);
       setItems(contexto.items || []);
-      setContextId(contexto.id || null); // Store the context_id for creating new items
+      setContextId(contexto.id || null);
     } catch (error) {
       console.error('Error al cargar contextos:', error);
+      // ✅ Mensaje de error mejorado
+      Alert.alert(
+        '⚠️ Error de Conexión',
+        'No se pudieron cargar los contextos. Verifica tu conexión e intenta más tarde.',
+        [{ text: 'Reintentar', onPress: fetchContextos }, { text: 'Cancelar' }]
+      );
     } finally {
       setLoading(false);
     }
   }, [grupoUuid]);
 
   const handleCreateContext = async () => {
-    try {
-      if (editingItem) {
-        // Update existing item
-        const contextData = {
-          family_group_context_id: contextId,
-          title: draftTitle,
-          description: draftDescription,
-        };
+    // ✅ Verificar conexión
+    const isConnected = await checkInternetConnection();
+    if (!isConnected) {
+      Alert.alert(
+        '❌ Sin Conexión', 
+        'Debes estar conectado a internet para guardar contextos.',
+        [{ text: 'Entendido' }]
+      );
+      return;
+    }
 
+    // ✅ Validar campos obligatorios
+    if (!draftTitle.trim() || !draftDescription.trim()) {
+      Alert.alert('⚠️ Campos Incompletos', 'Por favor completa el título y la descripción del contexto.');
+      return;
+    }
+
+    // ✅ VALIDAR SEGÚN LAS REGLAS DE PYDANTIC
+    const title = draftTitle.trim();
+    const description = draftDescription.trim();
+    
+    if (title.length < 2) {
+      Alert.alert('❌ Título muy corto', 'El título debe tener al menos 2 caracteres.');
+      return;
+    }
+    if (title.length > 200) {
+      Alert.alert('❌ Título muy largo', 'El título debe tener máximo 200 caracteres.');
+      return;
+    }
+    if (description.length < 5) {
+      Alert.alert('❌ Descripción muy corta', 'La descripción debe tener al menos 5 caracteres.');
+      return;
+    }
+
+    if (!contextId || typeof contextId !== 'number') {
+      Alert.alert('Error', 'No se pudo identificar el grupo familiar. Recarga la pantalla.');
+      return;
+    }
+
+    try {
+      const contextData = {
+        family_group_context_id: contextId,
+        title: title,
+        description: description,
+      };
+
+      if (editingItem) {
         await actualizarContextItem(editingItem.id, contextData);
       } else {
-        // Create new item
-        if (!contextId) {
-          console.error('No context ID available');
-          return;
-        }
-
-        const contextData = {
-          family_group_context_id: contextId,
-          title: draftTitle,
-          description: draftDescription,
-        };
-
         await crearContextItem(contextData);
       }
 
@@ -82,9 +131,64 @@ export default function ContextosScreen() {
       setDraftTitle('');
       setDraftDescription('');
       setEditingItem(null);
-      fetchContextos(); // recarga los datos
-    } catch (e) {
-      console.error('Error guardando contexto:', e);
+      fetchContextos();
+      
+      // ✅ Mensaje de éxito
+      if (!editingItem) {
+        Alert.alert(
+          '🎉 Contexto Creado',
+          'El nuevo contexto ha sido guardado exitosamente.',
+          [{ text: 'Perfecto' }]
+        );
+      }
+      
+    } catch (e: any) {
+      // ✅ MANEJAR ERROR ESPECÍFICO DE LÍMITE DE 15
+      if (e.response?.status === 400 && e.response?.data?.detail) {
+        const errorDetail = e.response.data.detail;
+        
+        // ✅ Si es un objeto con información del límite
+        if (typeof errorDetail === 'object' && errorDetail.error === 'limite_maximo_alcanzado') {
+          Alert.alert(
+            '🚫 Límite Alcanzado',
+            `${errorDetail.message}\n\nActualmente tienes ${errorDetail.cantidad_actual} contextos de ${errorDetail.limite_maximo} permitidos.`,
+            [
+              { text: 'Entendido', style: 'default' },
+              { 
+                text: 'Ver Contextos', 
+                onPress: () => {
+                  setModalVisible(false);
+                }
+              }
+            ]
+          );
+          return;
+        }
+        // ✅ Si es un string que menciona el límite
+        else if (typeof errorDetail === 'string' && errorDetail.includes('límite')) {
+          Alert.alert(
+            '🚫 Límite de Contextos Alcanzado',
+            'Has alcanzado el máximo de 15 contextos personalizados. Elimina algunos contextos existentes para crear uno nuevo.',
+            [
+              { text: 'Entendido', style: 'default' },
+              { 
+                text: 'Ver Contextos', 
+                onPress: () => {
+                  setModalVisible(false);
+                }
+              }
+            ]
+          );
+          return;
+        }
+      }
+      
+      // ✅ Otros errores generales
+      Alert.alert(
+        '⚠️ Error',
+        'No se pudo guardar el contexto. Verifica tu conexión e intenta más tarde.',
+        [{ text: 'Reintentar', onPress: handleCreateContext }, { text: 'Cancelar' }]
+      );
     }
   };
 
@@ -101,15 +205,32 @@ export default function ContextosScreen() {
   };
 
   const confirmDeleteContext = async () => {
+    // ✅ Verificar conexión
+    const isConnected = await checkInternetConnection();
+    if (!isConnected) {
+      Alert.alert(
+        '❌ Sin Conexión', 
+        'Debes estar conectado a internet para eliminar contextos.',
+        [{ text: 'Entendido' }]
+      );
+      return;
+    }
+
     try {
       if (itemToDelete) {
         await eliminarContextItem(itemToDelete.id);
         setDeleteModalVisible(false);
         setItemToDelete(null);
-        fetchContextos(); // recarga los datos
+        fetchContextos();
       }
     } catch (e) {
       console.error('Error eliminando contexto:', e);
+      // ✅ Mensaje de error mejorado
+      Alert.alert(
+        '⚠️ Error',
+        'No se pudo eliminar el contexto. Verifica tu conexión e intenta más tarde.',
+        [{ text: 'Reintentar', onPress: confirmDeleteContext }, { text: 'Cancelar' }]
+      );
     }
   };
 
@@ -118,11 +239,23 @@ export default function ContextosScreen() {
     setItemToDelete(null);
   };
 
+  // Modificar la función resetModal para asegurar limpieza completa:
   const resetModal = () => {
     setModalVisible(false);
-    setDraftTitle('');
-    setDraftDescription('');
-    setEditingItem(null);
+    // ✅ Usar setTimeout para asegurar limpieza después de cerrar modal
+    setTimeout(() => {
+      setDraftTitle('');
+      setDraftDescription('');
+      setEditingItem(null);
+    }, 100);
+  };
+
+  // ✅ También limpiar al abrir modal para crear (no editar):
+  const openCreateModal = () => {
+    setDraftTitle('');        // ✅ Limpiar antes de abrir
+    setDraftDescription('');  // ✅ Limpiar antes de abrir
+    setEditingItem(null);     // ✅ Asegurar que no está editando
+    setModalVisible(true);
   };
 
   useEffect(() => { 
@@ -184,7 +317,7 @@ export default function ContextosScreen() {
 
       <Pressable
         style={styles.fab}
-        onPress={() => setModalVisible(true)}
+        onPress={openCreateModal}
         android_ripple={{ color: 'rgba(255,255,255,0.25)' }}
       >
         <Ionicons name="add" size={26} color="#fff" />
@@ -209,13 +342,23 @@ export default function ContextosScreen() {
               style={styles.input}
             />
 
-            <TextInput
-              placeholder="Descripción"
-              value={draftDescription}
-              onChangeText={setDraftDescription}
-              style={[styles.input, { height: 80 }]}
-              multiline
-            />
+            <View style={styles.textInputContainer}>
+              {draftDescription === '' && (
+                <Text style={styles.customPlaceholder}>
+                  Tiene diabetes hace 5 años, hipertensión y asma. Vive con su esposa y dos hijos.
+                </Text>
+              )}
+              <TextInput
+                value={draftDescription}
+                onChangeText={setDraftDescription}
+                style={[styles.input, styles.descriptionInput]}
+                multiline
+                autoCorrect={false}
+                autoComplete="off"
+                spellCheck={false}
+                textAlignVertical="top"
+              />
+            </View>
 
             <View style={styles.modalButtons}>
               <Button title="Cancelar" color="#888" onPress={resetModal} />
@@ -348,6 +491,29 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
     marginBottom: spacing.md,
     backgroundColor: '#fff',
+  },
+  textInputContainer: {
+    position: 'relative',
+    marginBottom: spacing.md,
+  },
+  customPlaceholder: {
+    position: 'absolute',
+    top: spacing.sm + 1, // Ajustar según el border del input
+    left: spacing.sm + 1,
+    right: spacing.sm + 1,
+    color: '#888',
+    fontSize: 14,
+    lineHeight: 20,
+    zIndex: 1,
+    pointerEvents: 'none', // Permite tocar el TextInput debajo
+    paddingTop: spacing.sm, // Mismo padding que el TextInput
+  },
+  descriptionInput: {
+    height: 80,
+    textAlignVertical: 'top',
+    paddingTop: spacing.sm,
+    fontSize: 14,
+    lineHeight: 20,
   },
   modalButtons: {
     flexDirection: 'row',

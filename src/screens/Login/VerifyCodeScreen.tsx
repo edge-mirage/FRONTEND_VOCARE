@@ -12,9 +12,8 @@ import {
 } from 'react-native';
 import { colors, spacing } from '@/theme';
 import Header from '@/components/Header';
-// ✅ CORREGIR IMPORT - usar axios y BASE_URL
 import axios from 'axios';
-import { BASE_URL } from '@/crud/auth';
+import { URL, cambiarContrasenaConCodigo } from '@/crud/user';
 
 export default function VerifyCodeScreen({ route, navigation }: any) {
   const { email, newPassword } = route.params;
@@ -41,6 +40,7 @@ export default function VerifyCodeScreen({ route, navigation }: any) {
     }
   };
 
+  // ✅ CORREGIR: Usar la función del CRUD
   const handleVerifyCode = async () => {
     const verificationCode = code.join('');
     
@@ -56,21 +56,18 @@ export default function VerifyCodeScreen({ route, navigation }: any) {
       console.log('🔐 Verificando código y cambiando contraseña...');
       console.log('📧 Email:', email);
       console.log('🔑 Código:', verificationCode);
-      console.log('🆕 Nueva contraseña longitud:', newPassword?.length || 0);
 
-      // ✅ Usar axios directamente con BASE_URL
-      const response = await axios.post(`${BASE_URL}/user/change-password-with-code`, {
-        email: email,
-        code: verificationCode,
-        new_password: newPassword
-      }, {
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        timeout: 15000  // 15 segundos timeout
-      });
+      // ✅ USAR LA FUNCIÓN DEL CRUD
+      const response = await cambiarContrasenaConCodigo(
+        email.toLowerCase().trim(),
+        verificationCode.toUpperCase().trim(),
+        newPassword
+      );
 
-      console.log('✅ Contraseña cambiada exitosamente:', response.data);
+      console.log('✅ Contraseña cambiada exitosamente:', response);
+
+      // ✅ Limpiar código después del éxito
+      setCode(['', '', '', '', '', '']);
 
       Alert.alert(
         '🎉 ¡Éxito!',
@@ -79,61 +76,52 @@ export default function VerifyCodeScreen({ route, navigation }: any) {
           {
             text: 'Ir al Login',
             onPress: () => {
-              // Resetear el stack de navegación para evitar volver atrás
               navigation.reset({
                 index: 0,
                 routes: [{ name: 'Login' }],
               });
             }
           }
-        ]
+        ],
+        { cancelable: false }
       );
 
     } catch (e: any) {
       console.error('❌ Error cambiando contraseña:', e);
-      console.error('❌ Error response:', e.response?.data);
-      console.error('❌ Error status:', e.response?.status);
+      console.error('❌ Response data:', e.response?.data);
+      console.error('❌ Response status:', e.response?.status);
       
-      // ✅ Manejo específico de errores
+      // ✅ Mejor manejo de errores específicos
       if (e.response?.status === 400) {
-        const errorDetail = e.response?.data?.detail || 'Código incorrecto o expirado';
-        setError(errorDetail);
-        
-        // Si el código expiró, ofrecer reenviar
-        if (errorDetail.toLowerCase().includes('expirado')) {
-          Alert.alert(
-            'Código Expirado',
-            'El código de verificación ha expirado. ¿Deseas solicitar uno nuevo?',
-            [
-              { text: 'Cancelar', style: 'cancel' },
-              { text: 'Reenviar', onPress: handleResendCode }
-            ]
-          );
+        const detail = e.response.data?.detail || 'Código inválido';
+        if (detail.includes('expirado') || detail.includes('expired')) {
+          setError('El código ha expirado. Solicita uno nuevo.');
+        } else if (detail.includes('inválido') || detail.includes('invalid')) {
+          setError('Código incorrecto. Verifica el código del email.');
+        } else {
+          setError(detail);
         }
       } else if (e.response?.status === 404) {
         setError('Usuario no encontrado');
-        Alert.alert('Error', 'No se encontró el usuario. Por favor, intenta el proceso desde el inicio.');
-      } else if (e.response?.status === 500) {
-        setError('Error interno del servidor');
-        Alert.alert('Error', 'Hubo un problema en el servidor. Por favor, intenta más tarde.');
-      } else if (e.code === 'ECONNABORTED') {
-        setError('Tiempo de espera agotado');
-        Alert.alert('Timeout', 'La conexión tardó demasiado. Verifica tu conexión a internet.');
+      } else if (e.code === 'ECONNABORTED' || e.message.includes('timeout')) {
+        setError('Conexión lenta. Por favor, intenta nuevamente.');
+      } else if (e.code === 'NETWORK_ERROR') {
+        setError('Sin conexión. Verifica tu internet.');
       } else {
-        setError('Error al cambiar contraseña. Inténtalo nuevamente.');
+        setError('Error al cambiar contraseña. Intenta nuevamente.');
       }
     } finally {
       setLoading(false);
     }
   };
 
+  // ✅ MANTENER handleResendCode con axios directo
   const handleResendCode = async () => {
     setResendLoading(true);
     try {
       console.log('📤 Reenviando código a:', email);
       
-      // ✅ Llamar al endpoint de recuperar contraseña para reenviar código
-      await axios.post(`${BASE_URL}/user/recover-password`, {
+      await axios.post(`${URL}/user/recover-password`, {
         email: email
       }, {
         headers: {
@@ -142,7 +130,6 @@ export default function VerifyCodeScreen({ route, navigation }: any) {
         timeout: 10000
       });
       
-      // Limpiar el código actual
       setCode(['', '', '', '', '', '']);
       setError('');
       
