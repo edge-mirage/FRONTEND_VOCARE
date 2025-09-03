@@ -18,10 +18,18 @@ type Nav = NativeStackNavigationProp<LlamadaStackParamList, 'LlamadaActiva'>;
 type Rt  = RouteProp<LlamadaStackParamList, 'LlamadaActiva'>;
 
 // ⬅️ pon la IP de tu PC accesible desde el dispositivo
-const WS_URL = Platform.select({
-  android: 'ws://10.250.108.210:8000/calls/ws/audio',
-  ios:     'ws://10.250.108.210:8000/calls/ws/audio',
+const WS_BASE = Platform.select({
+  android: 'ws://10.250.108.210:8000',
+  ios:     'ws://10.250.108.210:8000',
 })!;
+const WS_PATH = Platform.select({
+  android: '/calls/ws/audio', // si realmente tienes /calls2 para Android
+  ios:     '/calls/ws/audio',
+})!;
+const buildWsUrl = (pacientId: number, contextItemId: number) => {
+  const qs = `pacient_id=${encodeURIComponent(String(pacientId))}&id_contexto=${encodeURIComponent(String(contextItemId))}`;
+  return `${WS_BASE}${WS_PATH}?${qs}`;
+};
 
 const TMP_WAV_PATH = `${RNFS.CachesDirectoryPath}/call_tmp.wav`;
 
@@ -35,6 +43,8 @@ export default function LlamadaActivaScreen() {
   const navigation = useNavigation<Nav>();
   const { params } = useRoute<Rt>();
   const who = params?.voiceName ?? 'Voz replicada';
+  const pacientId = params?.pacientId;
+  const contextItemId = params?.contextItemId;
 
   const [seconds, setSeconds] = useState(0);
   const [speaker, setSpeaker] = useState(false);
@@ -106,7 +116,9 @@ export default function LlamadaActivaScreen() {
 
   // conexión WS (pausa → reproduce → reanuda)
   function connectWS() {
-    const ws = new WebSocket(WS_URL);
+    // Construimos la URL con las IDs que exige el backend
+    const url = buildWsUrl(pacientId, contextItemId);
+    const ws = new WebSocket(url);
     wsRef.current = ws;
 
     ws.onopen = async () => {

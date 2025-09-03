@@ -1,3 +1,4 @@
+// src/screens/Llamadas/AgendarLlamadasScreen.tsx
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, FlatList, Pressable, StyleSheet, Text, ActivityIndicator, Alert } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -9,8 +10,8 @@ import ScheduleCard from '@/components/schedule/ScheduleCard';
 import { colors, spacing } from '@/theme';
 import type { ScheduledCall } from '@/domain/schedule/types';
 import type { LlamadaStackParamList } from '@/navigation/types';
+import { useGroupUuid } from '@/hooks/useGroupUuid';
 
-// 🔗 CRUD + mappers
 import {
   listSchedulesByGroup, createSchedule, updateSchedule, deleteSchedule,
   apiToUI, uiToApiCreate, uiToApiPatch,
@@ -20,17 +21,16 @@ type Nav = NativeStackNavigationProp<LlamadaStackParamList, 'AgendarLlamada'>;
 
 export default function AgendarLlamadasScreen() {
   const navigation = useNavigation<Nav>();
-
-  // ⚠️ Usa el grupo real desde tu estado/auth
-  const GROUP_UUID = 'b9283e77-561b-4b4a-827a-d2648990eb27';
+  const { groupUuid, loadingGroup } = useGroupUuid();
 
   const [items, setItems] = useState<ScheduledCall[]>([]);
   const [loading, setLoading] = useState(false);
 
   const load = useCallback(async () => {
+    if (!groupUuid) return; // aún sin uuid
     try {
       setLoading(true);
-      const rows = await listSchedulesByGroup(GROUP_UUID);
+      const rows = await listSchedulesByGroup(groupUuid); // 👈
       setItems(rows.map(apiToUI));
     } catch (e: any) {
       console.warn('Error listSchedulesByGroup', e?.message || e);
@@ -38,16 +38,17 @@ export default function AgendarLlamadasScreen() {
     } finally {
       setLoading(false);
     }
-  }, [GROUP_UUID]);
+  }, [groupUuid]); // 👈
 
   useEffect(() => { load(); }, [load]);
 
   // ---- acciones ----
   const add = async (payload: Omit<ScheduledCall, 'id'>) => {
+    if (!groupUuid) return;
     try {
-      const created = await createSchedule(uiToApiCreate(payload, GROUP_UUID));
+      const created = await createSchedule(uiToApiCreate(payload, groupUuid)); // 👈
       setItems(prev => [apiToUI(created), ...prev]);
-    } catch (e: any) {
+    } catch {
       Alert.alert('Error', 'No se pudo crear la llamada.');
     }
   };
@@ -56,20 +57,17 @@ export default function AgendarLlamadasScreen() {
     try {
       const updated = await updateSchedule(Number(id), uiToApiPatch(payload));
       setItems(prev => prev.map(i => (i.id === id ? apiToUI(updated) : i)));
-    } catch (e: any) {
+    } catch {
       Alert.alert('Error', 'No se pudo actualizar la llamada.');
     }
   };
 
-  // 🔴 ahora persiste 'active' (optimista con rollback)
   const toggle = async (id: string, on: boolean) => {
     setItems(prev => prev.map(i => (i.id === id ? { ...i, active: on } : i)));
     try {
       const updated = await updateSchedule(Number(id), { active: on });
-      // refrescamos el item por si el backend devuelve otros campos normalizados
       setItems(prev => prev.map(i => (i.id === id ? apiToUI(updated as any) : i)));
-    } catch (e: any) {
-      // rollback
+    } catch {
       setItems(prev => prev.map(i => (i.id === id ? { ...i, active: !on } : i)));
       Alert.alert('Error', 'No se pudo cambiar el estado de la llamada.');
     }
@@ -79,7 +77,7 @@ export default function AgendarLlamadasScreen() {
     try {
       await deleteSchedule(Number(id));
       setItems(prev => prev.filter(i => i.id !== id));
-    } catch (e: any) {
+    } catch {
       Alert.alert('Error', 'No se pudo eliminar la llamada.');
     }
   };
@@ -97,11 +95,13 @@ export default function AgendarLlamadasScreen() {
     });
   };
 
+  const stillLoading = loadingGroup || loading;
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <Header title="Llamadas Agendadas" elevated />
 
-      {loading ? (
+      {stillLoading ? (
         <View style={{ flex:1, alignItems:'center', justifyContent:'center' }}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>

@@ -19,7 +19,7 @@ export type PacienteStackParamList = {
 export type LlamadaStackParamList = {
   LlamadaHome: undefined;
   LlamadaInstantanea: { voiceName?: string; number?: string } | undefined;
-  LlamadaActiva: { voiceName?: string; number?: string } | undefined;
+  LlamadaActiva: { voiceName?: string | undefined; number?: string | undefined; pacientId: number; contextItemId: number };
   LlamadaRapida: undefined;
   AgendarLlamada: undefined;
   ContextosDeLlamada: undefined;

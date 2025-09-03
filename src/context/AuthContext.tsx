@@ -1,6 +1,7 @@
 // src/context/AuthContext.tsx
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { getUser, clearSession } from '@/crud/auth';
+import { getPacientByGroupUuid } from '@/crud/pacient';
 import { StorageService } from '@/services/StorageService';
 
 interface AuthContextType {
@@ -44,7 +45,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         
         // Inicializar StorageService con datos del usuario
         console.log('📦 Inicializando StorageService con datos del usuario...');
-        await StorageService.initializeFromUser(storedUser);
+        //await StorageService.initializeFromUser(storedUser);
+
+        let pacient: any = null;
+        try {
+          const { data } = await getPacientByGroupUuid(storedUser.group_uuid as string);
+          pacient = data || null;
+          console.log('🩺 Paciente resuelto por group_uuid:', pacient?.id ?? '(none)');
+        } catch (e) {
+          console.warn('⚠️ No fue posible resolver el paciente en este momento:', e);
+        }
+        await StorageService.initializeFromUser(storedUser, pacient);
+
         console.log('✅ StorageService inicializado');
       } else {
         setUser(null);

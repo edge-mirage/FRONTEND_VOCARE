@@ -8,7 +8,41 @@ const KEYS = {
   FAMILY_GROUP_CONTEXT_ID: '@app/family_group_context_id',
 };
 
+const ACCESS_KEY = '@auth/access_token';
+const REFRESH_KEY = '@auth/refresh_token';
+const USER_KEY   = '@auth/user';
+
 export class StorageService {
+  // Obtener el access token
+  static async getAccessToken() {
+    return AsyncStorage.getItem(ACCESS_KEY);
+  }
+
+  // Obtener el refresh token
+  static async getRefreshToken() {
+    return AsyncStorage.getItem(REFRESH_KEY);
+  }
+
+  // Guardar access token
+  static async setAccessToken(token: string) {
+    return AsyncStorage.setItem(ACCESS_KEY, token);
+  }
+
+  // Guardar refresh token
+  static async setRefreshToken(token: string) {
+    return AsyncStorage.setItem(REFRESH_KEY, token);
+  }
+
+  // Remover access token
+  static async removeAccessToken() {
+    return AsyncStorage.removeItem(ACCESS_KEY);
+  }
+
+  // Remover refresh token
+  static async removeRefreshToken() {
+    return AsyncStorage.removeItem(REFRESH_KEY);
+  }
+
   // Pacient ID
   static async setPacientId(id: number): Promise<void> {
     try {
@@ -41,6 +75,11 @@ export class StorageService {
       console.error('❌ Error obteniendo pacient_id:', error);
       return null;
     }
+  }
+
+  static async clearPacientId(): Promise<void> {
+    try { await AsyncStorage.removeItem(KEYS.PACIENT_ID); }
+    catch (e) { console.error('❌ Error limpiando pacient_id:', e); }
   }
 
   // Group UUID
@@ -136,7 +175,7 @@ export class StorageService {
   }
 
   // Inicializar desde datos del usuario
-  static async initializeFromUser(user: any): Promise<void> {
+  static async initializeFromUser(user: any, pacient?: { id?: number } | null): Promise<void> {
     try {
       console.log('🔧 Inicializando StorageService desde usuario:', user);
       
@@ -146,11 +185,11 @@ export class StorageService {
       }
 
       // Pacient ID
-      if (user.id && typeof user.id === 'number') {
-        await this.setPacientId(user.id);
-      } else {
-        console.warn('⚠️ user.id no es válido:', user.id);
-      }
+      // if (user.id && typeof user.id === 'number') {
+      //   await this.setPacientId(user.id);
+      // } else {
+      //   console.warn('⚠️ user.id no es válido:', user.id);
+      // }
 
       // Group UUID
       if (user.group_uuid && typeof user.group_uuid === 'string') {
@@ -164,6 +203,14 @@ export class StorageService {
         await this.setVoiceId(user.voice_id);
       } else {
         console.warn('⚠️ user.voice_id no es válido:', user.voice_id);
+      }
+      
+      // ✅ Pacient ID (si fue provisto)
+      if (pacient?.id && Number.isFinite(pacient.id)) {
+        await this.setPacientId(pacient.id as number);
+      } else { // si cambió de usuario o no hay paciente asociado, limpia para evitar stale
+        await this.clearPacientId();
+        console.warn('⚠️ No se estableció pacient_id (pacient ausente o inválido)');
       }
 
       console.log('✅ StorageService inicializado correctamente');

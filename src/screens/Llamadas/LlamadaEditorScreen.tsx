@@ -1,6 +1,6 @@
 // src/screens/Llamadas/LlamadaEditorScreen.tsx
-import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, TextInput, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useMemo, useState, useEffect } from 'react';
+import { View, Text, StyleSheet, Pressable, TextInput, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import DatePicker from 'react-native-date-picker';
@@ -10,26 +10,27 @@ import Header from '@/components/Header';
 import DayPill from '@/components/schedule/DayPill';
 import { colors, spacing } from '@/theme';
 import type { Weekday, ScheduledCall } from '@/domain/schedule/types';
-import { CONTEXT_PRESETS, VOICE_OPTIONS, DURATION_OPTIONS } from '@/domain/schedule/options';
+import { VOICE_OPTIONS, DURATION_OPTIONS } from '@/domain/schedule/options';
 import type { LlamadaStackParamList } from '@/navigation/types';
+import { useGroupUuid } from '@/hooks/useGroupUuid';
+import { obtenerContextoPorGrupo } from '@/crud/family';
 
 type Nav = NativeStackNavigationProp<LlamadaStackParamList, 'LlamadaEditor'>;
 type Rt = RouteProp<LlamadaStackParamList, 'LlamadaEditor'>;
 
+type CtxOption = { id: string; label: string; description?: string };
+
 export default function LlamadaEditorScreen() {
   const navigation = useNavigation<Nav>();
-  const { params } = useRoute<Rt>(); // { initial?, onSubmit }
-
+  const { params } = useRoute<Rt>();
   const initial = params?.initial;
+
+  const { groupUuid } = useGroupUuid();
 
   const [tab, setTab] = useState<'weekly'|'calendar'>(initial?.repeat?.type === 'oneoff' ? 'calendar' : 'weekly');
   const [time, setTime] = useState<Date>(initial?.timeISO ? new Date(initial.timeISO) : new Date());
-  const [days, setDays] = useState<Weekday[]>(
-    initial?.repeat?.type === 'weekly' ? initial.repeat.days : [1,3,5]
-  );
-  const [dateISO, setDateISO] = useState<string | undefined>(
-    initial?.repeat?.type === 'oneoff' ? initial.repeat.dateISO : undefined
-  );
+  const [days, setDays] = useState<Weekday[]>(initial?.repeat?.type === 'weekly' ? initial.repeat.days : [1,3,5]);
+  const [dateISO, setDateISO] = useState<string | undefined>(initial?.repeat?.type === 'oneoff' ? initial.repeat.dateISO : undefined);
 
   const [contextText, setContextText] = useState(initial?.note ?? '');
   const [contextId, setContextId] = useState<string | undefined>(initial?.contextId);
@@ -38,6 +39,36 @@ export default function LlamadaEditorScreen() {
 
   const [showContextList, setShowContextList] = useState(false);
   const [showVoiceList, setShowVoiceList] = useState(false);
+
+  // 👇 cargar contextos del backend del grupo actual
+  const [ctxOptions, setCtxOptions] = useState<CtxOption[]>([]);
+  const [ctxLoading, setCtxLoading] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      if (!groupUuid) return;
+      setCtxLoading(true);
+      try {
+        const ctx = await obtenerContextoPorGrupo(groupUuid);
+        const opts = (ctx?.items ?? []).map((it: any) => ({
+          id: String(it.id),
+          label: it.title,
+          description: it.description,
+        })) as CtxOption[];
+        setCtxOptions(opts);
+
+        // si venimos con contextId, y no hay texto, lo rellenamos con el label
+        if (initial?.contextId && !initial?.note) {
+          const found = opts.find(o => o.id === initial.contextId);
+          if (found) setContextText(found.label);
+        }
+      } catch (e) {
+        // silencioso: el usuario igual puede escribir texto libre
+      } finally {
+        setCtxLoading(false);
+      }
+    })();
+  }, [groupUuid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function toggleDay(d: Weekday) {
     setDays(prev => prev.includes(d) ? prev.filter(x=>x!==d) : [...prev, d].sort());
@@ -49,8 +80,8 @@ export default function LlamadaEditorScreen() {
     const payload: Omit<ScheduledCall, 'id'> = {
       timeISO: time.toISOString(),
       repeat: tab === 'weekly' ? { type: 'weekly', days } : { type: 'oneoff', dateISO: dateISO! },
-      note: contextText,
-      contextId,
+      note: contextText,         // texto libre (si eligió del listado, aquí queda el label)
+      contextId,                 // id del contexto del grupo (opcional)
       durationMin,
       voiceId,
       active: initial?.active ?? true,
@@ -88,7 +119,7 @@ export default function LlamadaEditorScreen() {
           {/* patrón */}
           {tab==='weekly' ? (
             <View style={{marginTop: spacing.md, flexDirection:'row', justifyContent:'space-between'}}>
-              {([1,2,3,4,5,6,0] as Weekday[]).map((d)=>(
+              {([1,2,3,4,5,6,0] as Weekday[]).map((d)=>( // L M X J V S D
                 <DayPill
                   key={d}
                   label={['D','L','M','X','J','V','S'][d]}
@@ -111,7 +142,7 @@ export default function LlamadaEditorScreen() {
           <View style={styles.contextRow}>
             <TextInput
               value={contextText}
-              onChangeText={(t)=>{ setContextText(t); setContextId(undefined); }}
+              onChangeText={(t)=>{ setContextText(t); setContextId(undefined); }} // si escribe, quitamos id
               placeholder="Escriba o seleccione el contexto para esta llamada"
               placeholderTextColor="#9CA3AF"
               style={styles.textarea}
@@ -121,21 +152,35 @@ export default function LlamadaEditorScreen() {
               <Ionicons name="chevron-down" size={18} color={colors.text} />
             </Pressable>
           </View>
+
           {showContextList && (
             <View style={styles.dropdown}>
-              {CONTEXT_PRESETS.map(p => (
-                <Pressable
-                  key={p.id}
-                  onPress={() => { setContextId(p.id); setContextText(p.label); setShowContextList(false); }}
-                  style={styles.dropdownItem}
-                >
-                  <Text style={styles.dropdownText}>{p.label}</Text>
-                </Pressable>
-              ))}
+              {ctxLoading ? (
+                <View style={{padding: 12, alignItems:'center'}}>
+                  <ActivityIndicator color={colors.primary} />
+                </View>
+              ) : ctxOptions.length ? (
+                ctxOptions.map(p => (
+                  <Pressable
+                    key={p.id}
+                    onPress={() => { setContextId(p.id); setContextText(p.description || p.label); setShowContextList(false); }}
+                    style={styles.dropdownItem}
+                  >
+                    <Text style={styles.dropdownText}>{p.label}</Text>
+                    {!!p.description && <Text style={[styles.dropdownText, {color: colors.textMuted, marginTop: 2}]} numberOfLines={2}>{p.description}</Text>}
+                  </Pressable>
+                ))
+              ) : (
+                <View style={{padding: 12}}>
+                  <Text style={{color: colors.textMuted}}>
+                    No tienes contextos aún. Puedes crearlos en “Contextos de Llamada”.
+                  </Text>
+                </View>
+              )}
             </View>
           )}
 
-          {/* voz replicada */}
+          {/* voz replicada (de momento estático) */}
           <Text style={styles.fieldLabel}>Voz replicada</Text>
           <Pressable style={styles.selectRow} onPress={()=>setShowVoiceList(v=>!v)}>
             <Text style={voiceLabel ? styles.selectTextValue : styles.selectPlaceholder}>

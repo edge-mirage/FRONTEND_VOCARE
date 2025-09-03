@@ -1,6 +1,6 @@
 // src/screens/Llamadas/LlamadaRapidaScreen.tsx
-import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, TextInput, ScrollView } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, Pressable, TextInput, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@react-native-vector-icons/ionicons';
@@ -9,28 +9,27 @@ import Header from '@/components/Header';
 import { colors, spacing } from '@/theme';
 import { DURATION_OPTIONS } from '@/domain/schedule/options';
 import type { LlamadaStackParamList } from '@/navigation/types';
+import { useUserContexts } from '@/hooks/useUserContexts'; // 👈 solo contextos reales
+import { StorageService } from '@/services/StorageService';
 
-// ====== MOCKS (reemplazar luego por fetch al backend) ======
-const MOCK_CONTEXTS = [
-  { id: 'c1', label: 'Conversación rutinaria y casual' },
-  { id: 'c2', label: 'Preguntar por su salud y cómo se ha sentido' },
-  { id: 'c3', label: 'Intereses recientes y actividades de la semana' },
-  { id: 'c4', label: 'Eventos próximos y recordatorios' },
-];
-
+// ====== VOCES MOCK (se mantienen) ======
 const MOCK_VOICES = [
   { id: 'v1', nombre: 'Camila' },
   { id: 'v2', nombre: 'Marco' },
   { id: 'v3', nombre: 'María' },
   { id: 'v4', nombre: 'Andrés' },
 ];
-// ===========================================================
+// =======================================
 
 type Nav = NativeStackNavigationProp<LlamadaStackParamList, 'LlamadaRapida'>;
 
-export default function LlamadaRaoudaScreen() {
+export default function LlamadaRapidaScreen() {
   const navigation = useNavigation<Nav>();
 
+  // Contextos reales del usuario
+  const { contexts, loading } = useUserContexts();
+
+  // Estado UI
   const [contextText, setContextText] = useState('');
   const [contextId, setContextId] = useState<string | undefined>();
   const [showContextList, setShowContextList] = useState(false);
@@ -39,6 +38,11 @@ export default function LlamadaRaoudaScreen() {
   const [showVoiceList, setShowVoiceList] = useState(false);
 
   const [durationMin, setDurationMin] = useState<number>(10);
+  const [pacientId, setPacientId] = useState<number | null>(null);
+
+  useEffect(() => {
+    StorageService.getPacientId().then(setPacientId);
+  }, []);
 
   const voiceLabel = useMemo(
     () => (voiceId ? MOCK_VOICES.find(v => v.id === voiceId)?.nombre : undefined),
@@ -46,7 +50,20 @@ export default function LlamadaRaoudaScreen() {
   );
 
   const startCall = () => {
-    navigation.navigate('LlamadaInstantanea', { voiceName: voiceLabel ?? 'Voz replicada' });
+    if (!pacientId) {
+      Alert.alert('Falta paciente', 'No se encontró el ID del paciente en el dispositivo.');
+      return;
+    }
+    if (!contextId) {
+      Alert.alert('Falta contexto', 'Selecciona un contexto de la lista para esta llamada.');
+      return;
+    }
+    navigation.navigate('LlamadaActiva', {
+      voiceName: voiceLabel ?? 'Voz replicada',
+      pacientId,
+      contextItemId: Number(contextId),
+      // si quieres, puedes pasar también durationMin
+    });
   };
 
   return (
@@ -59,7 +76,6 @@ export default function LlamadaRaoudaScreen() {
           <Ionicons name="call" size={72} color="#fff" />
         </Pressable>
 
-        {/* Tarjeta con campos */}
         <View style={styles.card}>
           {/* Contexto */}
           <Text style={styles.fieldLabel}>Contexto</Text>
@@ -78,26 +94,40 @@ export default function LlamadaRaoudaScreen() {
               </Pressable>
             </View>
 
-            <Pressable onPress={() => { /* TODO: dictado por voz si aplica */ }} style={styles.roundSideBtn}>
+            <Pressable onPress={() => { /* opcional: dictado por voz */ }} style={styles.roundSideBtn}>
               <Ionicons name="mic-outline" size={18} color="#fff" />
             </Pressable>
           </View>
 
-          {showContextList && (
+          {/* Lista de contextos (reales) */}
+          {loading ? (
+            <View style={{ paddingVertical: spacing.md, alignItems: 'center' }}>
+              <ActivityIndicator color={colors.primary} />
+            </View>
+          ) : showContextList && (
             <View style={styles.dropdown}>
-              {MOCK_CONTEXTS.map(c => (
+              {contexts.map(c => (
                 <Pressable
                   key={c.id}
-                  onPress={() => { setContextId(c.id); setContextText(c.label); setShowContextList(false); }}
+                  onPress={() => {
+                    setContextId(String(c.id));
+                    setContextText(c.description || c.title);
+                    setShowContextList(false);
+                  }}
                   style={styles.dropdownItem}
                 >
-                  <Text style={styles.dropdownText}>{c.label}</Text>
+                  <Text style={styles.dropdownText}>{c.title}</Text>
                 </Pressable>
               ))}
+              {contexts.length === 0 && (
+                <View style={{ padding: spacing.md }}>
+                  <Text style={{ color: colors.textMuted }}>No hay contextos disponibles.</Text>
+                </View>
+              )}
             </View>
           )}
 
-          {/* Voz replicada */}
+          {/* Voz replicada (MOCK) */}
           <Text style={styles.fieldLabel}>Voz replicada</Text>
           <Pressable style={styles.selectRow} onPress={() => setShowVoiceList(v => !v)}>
             <Text style={voiceLabel ? styles.selectValue : styles.selectPlaceholder}>
