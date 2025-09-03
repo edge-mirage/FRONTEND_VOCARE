@@ -8,6 +8,7 @@ import PacienteStack from './PacienteStack';
 import LlamadaStack from './LlamadaStack';
 import ReplicacionStack from './ReplicacionStack';
 import GrupoStack from './GrupoStack';
+import HomeStack from './HomeStack';
 import { colors } from '@/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -20,20 +21,22 @@ const ICONS: Record<RouteName, React.ComponentProps<typeof Ionicons>['name']> = 
   LlamadasTab: 'call-outline',
   GrupoTab: 'people-outline',
   ReplicacionTab: 'mic-outline',
+  HomeTab: 'home-outline', // ← añadido
 };
 
 export default function MainTabs() {
   const insets = useSafeAreaInsets();
 
-  // estilo base de la barra (lo reutilizamos para sobreescribir por pantalla)
+  // estilo base reutilizable
   const baseBarStyle = {
     height: 56 + insets.bottom,
     paddingBottom: Math.max(6, insets.bottom),
     paddingTop: 6,
-  };
+  } as const;
 
   return (
     <Tab.Navigator
+      initialRouteName="ReplicacionTab" // ← mantén o cambia según prefieras
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
@@ -44,12 +47,23 @@ export default function MainTabs() {
         },
       })}
     >
-      <Tab.Screen name="PacienteTab" component={PacienteStack} options={{ title: 'Paciente' }} />
+      <Tab.Screen
+        name="PacienteTab"
+        component={PacienteStack}
+        options={{ title: 'Paciente' }}
+      />
+
+      <Tab.Screen
+        name="HomeTab"
+        component={HomeStack}
+        options={{ title: 'Inicio' }}
+      />
 
       <Tab.Screen
         name="LlamadasTab"
         component={LlamadaStack}
         options={({ route }) => {
+          // Oculta la tab bar cuando entras a pantallas de llamada
           const nested = getFocusedRouteNameFromRoute(route) ?? 'LlamadaHome';
           const hide = nested === 'LlamadaInstantanea' || nested === 'LlamadaActiva';
 
@@ -62,8 +76,17 @@ export default function MainTabs() {
         }}
       />
 
-      <Tab.Screen name="GrupoTab" component={GrupoStack} options={{ title: 'Grupo' }} />
-      <Tab.Screen name="ReplicacionTab" component={ReplicacionStack} options={{ title: 'Replicación' }} />
+      <Tab.Screen
+        name="GrupoTab"
+        component={GrupoStack}
+        options={{ title: 'Grupo' }}
+      />
+
+      <Tab.Screen
+        name="ReplicacionTab"
+        component={ReplicacionStack}
+        options={{ title: 'Replicación' }}
+      />
     </Tab.Navigator>
   );
 }

@@ -37,21 +37,37 @@ export type GrupoStackParamList = {
   OPCION2: undefined;
 };
 
+// src/navigation/types.ts
 export type ReplicacionStackParamList = {
   ReplicacionHome: undefined;
   Informacion: undefined;
-  Replicacion: undefined;
+  Replicacion: { justRecorded?: boolean } | undefined; // ← permite el flag
   VocesRegistradas: undefined;
+  ReconocimientoVoz: { reset?: boolean } | undefined;
+  FoneticaPalabras: undefined;
+  VivaWanderers: undefined;
+  ReplicacionScreenSure: {
+    audio: { uri: string; durationSec: number; createdAt: number };
+  };
 };
+
 
 export type MainTabParamList = {
   PacienteTab: undefined;
+  HomeTab: undefined;
   LlamadasTab: undefined;
   GrupoTab: undefined;
   ReplicacionTab: undefined;
 };
 
 export type RootStackParamList = {
+  Login: undefined;
+  RecoverPassword: undefined;
+  VerifyCode: {
+    email: string;
+    newPassword: string;
+  };
   MainTabs: undefined;
   HomeStack: undefined;
+  Registro: undefined;
 };
