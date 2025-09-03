@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { colors, spacing } from '@/theme';
 import Header from '@/components/Header';
-import { login } from '@/crud/auth';
+import { login, resendVerification } from '@/crud/auth';
 import { useAuth } from '@/context/AuthContext';
 
 export default function LoginScreen({ navigation }: any) {
@@ -50,6 +50,46 @@ export default function LoginScreen({ navigation }: any) {
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  };
+
+  // ✅ ACTUALIZAR LA FUNCIÓN handleResendVerification
+  const handleResendVerification = async (userEmail: string) => {
+    try {
+      console.log('📧 [REENVIO] Reenviando código de verificación para:', userEmail);
+      
+      await resendVerification({
+        email: userEmail.trim().toLowerCase()
+      });
+      
+      Alert.alert(
+        '📧 Código Enviado',
+        `Se ha enviado un nuevo código de verificación a tu email: ${userEmail}\n\nRevisa tu bandeja de entrada y spam.`,
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { 
+            text: 'Ir a Verificación', 
+            onPress: () => navigation.navigate('VerifyCode', { 
+              email: userEmail,
+              isEmailVerification: true  // ✅ AGREGAR FLAG
+            })
+          }
+        ]
+      );
+      
+    } catch (error: any) {
+      console.error('❌ [REENVIO] Error:', error);
+      
+      let errorMessage = 'No se pudo reenviar el código. Intenta más tarde.';
+      if (error.message.includes('ya está verificado')) {
+        errorMessage = 'El email ya está verificado. Intenta iniciar sesión nuevamente.';
+      } else if (error.message.includes('no encontrado')) {
+        errorMessage = 'Usuario no encontrado.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      Alert.alert('❌ Error', errorMessage);
+    }
   };
 
   const handleLogin = async () => {
@@ -138,7 +178,7 @@ export default function LoginScreen({ navigation }: any) {
         return;
       }
       
-      // ✅ Manejar email no verificado
+      // ✅ ACTUALIZAR MANEJO DE EMAIL NO VERIFICADO
       if (e.isEmailNotVerified) {
         setError('Por favor verifica tu email antes de iniciar sesión');
         Alert.alert(
@@ -147,11 +187,15 @@ export default function LoginScreen({ navigation }: any) {
           [
             { text: 'Cancelar', style: 'cancel' },
             { 
-              text: 'Reenviar Email', 
-              onPress: () => {
-                // TODO: Implementar reenvío de email de verificación
-                Alert.alert('Información', 'Funcionalidad de reenvío próximamente');
-              }
+              text: 'Reenviar Código', 
+              onPress: () => handleResendVerification(email)
+            },
+            {
+              text: 'Ya tengo código',
+              onPress: () => navigation.navigate('VerifyCode', { 
+                email, 
+                isEmailVerification: true  // ✅ AGREGAR FLAG
+              })
             }
           ]
         );

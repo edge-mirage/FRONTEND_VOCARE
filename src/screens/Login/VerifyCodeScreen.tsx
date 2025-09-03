@@ -14,9 +14,11 @@ import { colors, spacing } from '@/theme';
 import Header from '@/components/Header';
 import axios from 'axios';
 import { URL, cambiarContrasenaConCodigo } from '@/crud/user';
+import { verifyEmail } from '@/crud/auth'; // ✅ AGREGAR IMPORT
 
 export default function VerifyCodeScreen({ route, navigation }: any) {
-  const { email, newPassword } = route.params;
+  // ✅ DISTINGUIR ENTRE LOS DOS CASOS
+  const { email, newPassword, isEmailVerification } = route.params;
   const [code, setCode] = useState(['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -40,28 +42,68 @@ export default function VerifyCodeScreen({ route, navigation }: any) {
     }
   };
 
-  // ✅ CORREGIR: Usar la función del CRUD
-  const handleVerifyCode = async () => {
-    const verificationCode = code.join('');
-    
-    if (verificationCode.length !== 6) {
-      setError('Por favor ingresa el código completo');
-      return;
+  // ✅ FUNCIÓN PARA VERIFICACIÓN DE EMAIL (NUEVO)
+  const handleEmailVerification = async (verificationCode: string) => {
+    try {
+      console.log('📧 Verificando email...');
+      console.log('📧 Email:', email);
+      console.log('🔑 Código:', verificationCode);
+
+      await verifyEmail({
+        email: email.toLowerCase().trim(),
+        code: verificationCode.trim()
+      });
+
+      console.log('✅ Email verificado exitosamente');
+
+      // ✅ Limpiar código después del éxito
+      setCode(['', '', '', '', '', '']);
+
+      Alert.alert(
+        '🎉 ¡Email Verificado!',
+        'Tu email ha sido verificado exitosamente. Ahora puedes iniciar sesión.',
+        [
+          {
+            text: 'Iniciar Sesión',
+            onPress: () => {
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'Login' }],
+              });
+            }
+          }
+        ],
+        { cancelable: false }
+      );
+
+    } catch (e: any) {
+      console.error('❌ Error verificando email:', e);
+      
+      // ✅ Manejo de errores específicos para verificación de email
+      if (e.message.includes('inválido') || e.message.includes('expirado')) {
+        setError('Código incorrecto o expirado. Solicita uno nuevo.');
+      } else if (e.message.includes('ya está verificado')) {
+        setError('El email ya está verificado. Puedes iniciar sesión.');
+      } else {
+        setError('Error al verificar email. Intenta nuevamente.');
+      }
+      
+      throw e; // Re-throw para que handleVerifyCode maneje el loading
     }
+  };
 
-    setLoading(true);
-    setError('');
-
+  // ✅ FUNCIÓN PARA CAMBIO DE CONTRASEÑA (EXISTENTE)
+  const handlePasswordChange = async (verificationCode: string) => {
     try {
       console.log('🔐 Verificando código y cambiando contraseña...');
       console.log('📧 Email:', email);
       console.log('🔑 Código:', verificationCode);
 
-      // ✅ USAR LA FUNCIÓN DEL CRUD
+      // ✅ USAR LA FUNCIÓN DEL CRUD (REQUIERE newPassword)
       const response = await cambiarContrasenaConCodigo(
         email.toLowerCase().trim(),
         verificationCode.toUpperCase().trim(),
-        newPassword
+        newPassword // ✅ MANTENER newPassword para cambio de contraseña
       );
 
       console.log('✅ Contraseña cambiada exitosamente:', response);
@@ -88,10 +130,8 @@ export default function VerifyCodeScreen({ route, navigation }: any) {
 
     } catch (e: any) {
       console.error('❌ Error cambiando contraseña:', e);
-      console.error('❌ Response data:', e.response?.data);
-      console.error('❌ Response status:', e.response?.status);
       
-      // ✅ Mejor manejo de errores específicos
+      // ✅ Manejo de errores específicos para cambio de contraseña
       if (e.response?.status === 400) {
         const detail = e.response.data?.detail || 'Código inválido';
         if (detail.includes('expirado') || detail.includes('expired')) {
@@ -103,32 +143,67 @@ export default function VerifyCodeScreen({ route, navigation }: any) {
         }
       } else if (e.response?.status === 404) {
         setError('Usuario no encontrado');
-      } else if (e.code === 'ECONNABORTED' || e.message.includes('timeout')) {
-        setError('Conexión lenta. Por favor, intenta nuevamente.');
-      } else if (e.code === 'NETWORK_ERROR') {
-        setError('Sin conexión. Verifica tu internet.');
       } else {
         setError('Error al cambiar contraseña. Intenta nuevamente.');
       }
+      
+      throw e; // Re-throw para que handleVerifyCode maneje el loading
+    }
+  };
+
+  // ✅ FUNCIÓN PRINCIPAL QUE DECIDE QUÉ HACER
+  const handleVerifyCode = async () => {
+    const verificationCode = code.join('');
+    
+    if (verificationCode.length !== 6) {
+      setError('Por favor ingresa el código completo');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      // ✅ DECIDIR SEGÚN EL TIPO DE VERIFICACIÓN
+      if (isEmailVerification) {
+        await handleEmailVerification(verificationCode);
+      } else {
+        // ✅ VERIFICAR QUE TENEMOS newPassword para cambio de contraseña
+        if (!newPassword) {
+          throw new Error('Falta la nueva contraseña para el cambio');
+        }
+        await handlePasswordChange(verificationCode);
+      }
+
+    } catch (e: any) {
+      // Los errores específicos ya se manejan en las funciones individuales
+      console.error('❌ Error en verificación:', e);
     } finally {
       setLoading(false);
     }
   };
 
-  // ✅ MANTENER handleResendCode con axios directo
+  // ✅ REENVÍO SEGÚN EL TIPO
   const handleResendCode = async () => {
     setResendLoading(true);
     try {
       console.log('📤 Reenviando código a:', email);
       
-      await axios.post(`${URL}/user/recover-password`, {
-        email: email
-      }, {
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        timeout: 10000
-      });
+      if (isEmailVerification) {
+        // ✅ PARA VERIFICACIÓN DE EMAIL - usar función de auth
+        const { resendVerification } = await import('@/crud/auth');
+        await resendVerification({ email: email });
+      } else {
+        // ✅ PARA CAMBIO DE CONTRASEÑA - usar endpoint directo
+        await axios.post(`${URL}/users/recover-password`, {
+          email: email
+        }, {
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          timeout: 10000
+        });
+      }
       
       setCode(['', '', '', '', '', '']);
       setError('');
@@ -151,16 +226,20 @@ export default function VerifyCodeScreen({ route, navigation }: any) {
       style={{ flex: 1, backgroundColor: colors.card }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <Header title="Verificar Código" />
+      <Header title={isEmailVerification ? "Verificar Email" : "Verificar Código"} />
       <View style={styles.container}>
         <Text style={styles.instructions}>
-          Hemos enviado un código de verificación de 6 dígitos a:
+          {isEmailVerification 
+            ? "Hemos enviado un código de verificación de 6 dígitos a:"
+            : "Hemos enviado un código de verificación de 6 dígitos a:"
+          }
         </Text>
         <Text style={styles.email}>{email}</Text>
         <Text style={styles.subInstructions}>
           El código expira en 30 minutos
         </Text>
 
+        {/* ✅ EL RESTO DEL CÓDIGO DE LA UI PERMANECE IGUAL */}
         <View style={styles.codeContainer}>
           {code.map((digit, index) => (
             <TextInput
@@ -202,12 +281,14 @@ export default function VerifyCodeScreen({ route, navigation }: any) {
           {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.buttonText}>Verificar Código</Text>
+            <Text style={styles.buttonText}>
+              {isEmailVerification ? "Verificar Email" : "Verificar Código"}
+            </Text>
           )}
         </Pressable>
 
         <Pressable
-          style={[styles.resendButton, resendLoading && { opacity: 0.5 }]} // ✅ Faltaba cerrar corchete aquí
+          style={[styles.resendButton, resendLoading && { opacity: 0.5 }]}
           onPress={handleResendCode}
           disabled={resendLoading || loading}
         >
@@ -230,6 +311,7 @@ export default function VerifyCodeScreen({ route, navigation }: any) {
   );
 }
 
+// ✅ ESTILOS PERMANECEN IGUALES
 const styles = StyleSheet.create({
   container: {
     flex: 1,

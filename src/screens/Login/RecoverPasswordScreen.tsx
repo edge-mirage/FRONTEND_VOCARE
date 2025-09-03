@@ -107,7 +107,7 @@ export default function RecoverPasswordScreen({ navigation }: any) {
       console.log('🔐 Nueva contraseña longitud:', password.length);
 
       // ✅ MANTENER axios directo para envío de código
-      const response = await axios.post(`${URL}/user/recover-password`, { 
+      const response = await axios.post(`${URL}/users/recover-password`, { 
         email: email.toLowerCase().trim() 
       }, {
         headers: { 'Content-Type': 'application/json' },
