@@ -248,4 +248,38 @@ export class StorageService {
       return {};
     }
   }
+
+  // Nuevo método para limpiar sesión al cerrar app
+  static async clearSessionOnAppClose(): Promise<void> {
+    try {
+      console.log('🧹 Iniciando limpieza de sesión...');
+      await StorageService.removeAccessToken();
+      await StorageService.removeRefreshToken();
+      console.log('✅ Sesión limpiada al cerrar app');
+    } catch (error) {
+      console.error('❌ Error limpiando sesión:', error);
+    }
+  }
+
+  // Método para verificar si hay sesión válida
+  static async hasValidSession(): Promise<boolean> {
+    const accessToken = await StorageService.getAccessToken();
+    return !!accessToken;
+  }
+
+  // Limpiar todo (incluyendo tokens)
+  static async clearAll(): Promise<void> {
+    try {
+      console.log('🧹 Limpiando TODOS los datos...');
+      await AsyncStorage.multiRemove([
+        ...Object.values(KEYS),
+        ACCESS_KEY,
+        REFRESH_KEY,
+        USER_KEY
+      ]);
+      console.log('✅ Todos los datos limpiados');
+    } catch (error) {
+      console.error('❌ Error limpiando todos los datos:', error);
+    }
+  }
 }

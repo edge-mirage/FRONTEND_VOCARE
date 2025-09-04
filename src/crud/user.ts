@@ -4,7 +4,7 @@ import { Alert } from 'react-native';
 // Cambiar este flag a false cuando uses el servidor en la nube
 const useLocalServer = true;
 
-const LOCAL_URL = 'http://10.250.108.210:8000'; // o 10.0.2.2 si estás usando emulador Android
+const LOCAL_URL = 'http://10.0.2.2:8000'; // o 10.0.2.2 si estás usando emulador Android
 const PROD_URL = 'https://tu-servidor.com'; // cambia por tu dominio real
 
 export const URL = useLocalServer ? LOCAL_URL : PROD_URL;
@@ -23,6 +23,8 @@ export interface Usuario {
   created_at?: string;
   middle_name?: string;
   email_verified?: boolean;
+  phone?: string; // ✅ AGREGAR
+  relationship?: string; // ✅ AGREGAR
 }
 
 export interface CreateUsuario {
@@ -137,6 +139,104 @@ export const cambiarContrasenaConCodigo = async (email: string, code: string, ne
     return res.data;
   } catch (error) {
     console.error("❌ [USER_CRUD] Error cambiando contraseña:", error);
+    throw error;
+  }
+};
+
+// ✅ NUEVAS FUNCIONES DE PERFIL
+
+// ✅ CAMBIAR OBTENER PERFIL - SIN QUERY PARAMS
+export const obtenerPerfil = async (user_id: number): Promise<Usuario> => {
+  try {
+    console.log('👤 [USER_CRUD] Obteniendo perfil para user_id:', user_id);
+    
+    // ✅ USAR LA RUTA CON PATH PARAMETER
+    const res = await axios.get(`${URL}/users/profile/${user_id}`, {
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      timeout: 10000
+    });
+    
+    console.log('✅ [USER_CRUD] Perfil obtenido:', res.data);
+    return res.data.user;
+    
+  } catch (error: any) {
+    console.error('❌ [USER_CRUD] Error obteniendo perfil:', error);
+    throw error;
+  }
+};
+
+export interface ActualizarPerfilData {
+  user_id: number;
+  name?: string;
+  email?: string;
+  phone?: string;
+  current_password?: string;
+  new_password?: string;
+}
+
+export const actualizarPerfil = async (data: ActualizarPerfilData) => {
+  try {
+    console.log('👤 [USER_CRUD] Actualizando perfil:', data);
+    
+    const res = await axios.put(`${URL}/users/profile`, data, {
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      timeout: 20000
+    });
+    
+    console.log('✅ [USER_CRUD] Perfil actualizado:', res.data);
+    return res.data;
+    
+  } catch (error: any) {
+    console.error('❌ [USER_CRUD] Error actualizando perfil:', error);
+    throw error;
+  }
+};
+
+export const verificarEmail = async (email: string, code: string) => {
+  try {
+    console.log('🔍 [USER_CRUD] Verificando email con código');
+    
+    const res = await axios.post(`${URL}/users/verify-email`, {
+      email: email.toLowerCase().trim(),
+      code: code.toUpperCase().trim()
+    }, {
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      timeout: 15000
+    });
+    
+    console.log('✅ [USER_CRUD] Email verificado:', res.data);
+    return res.data;
+    
+  } catch (error: any) {
+    console.error('❌ [USER_CRUD] Error verificando email:', error);
+    throw error;
+  }
+};
+
+export const reenviarCodigoVerificacion = async (email: string) => {
+  try {
+    console.log('🔄 [USER_CRUD] Reenviando código de verificación');
+    
+    const res = await axios.post(`${URL}/users/resend-verification`, {
+      email: email.toLowerCase().trim()
+    }, {
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      timeout: 15000
+    });
+    
+    console.log('✅ [USER_CRUD] Código reenviado:', res.data);
+    return res.data;
+    
+  } catch (error: any) {
+    console.error('❌ [USER_CRUD] Error reenviando código:', error);
     throw error;
   }
 };

@@ -2,7 +2,7 @@ import axios from 'axios';
 import { UUID } from 'crypto';
 
 const useLocalServer = true;
-const LOCAL_URL = 'http://10.250.108.210:8000';
+const LOCAL_URL = 'http://10.0.2.2:8000';
 const PROD_URL = 'https://tu-servidor.com';
 export const URL = useLocalServer ? LOCAL_URL : PROD_URL;
 

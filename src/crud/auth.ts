@@ -7,7 +7,8 @@ import { doRefresh } from '@/services/AuthServices';
 
 
 const useLocalServer = true; // Cambiado a true para usar el servidor local
-const LOCAL_URL = 'http://10.250.108.210:8000'; 
+//const LOCAL_URL = 'http://10.250.108.210:8000'; 
+const LOCAL_URL = 'http://10.0.2.2:8000'; 
 const PROD_URL = 'https://tu-servidor.com';
 export const BASE_URL = useLocalServer ? LOCAL_URL : PROD_URL;
 
