@@ -40,6 +40,7 @@ export default function RegistroScreen({ navigation }: RegistroScreenProps) {
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [verificationLoading, setVerificationLoading] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   // ✅ VALIDACIONES - CAMBIAR A 8 CARACTERES
   const validateForm = (): string | null => {
@@ -52,6 +53,7 @@ export default function RegistroScreen({ navigation }: RegistroScreenProps) {
     if (password.length < 8) return 'La contraseña debe tener al menos 8 caracteres'; // ✅ CAMBIAR A 8
     if (password !== confirmPassword) return 'Las contraseñas no coinciden';
     if (!parentesco) return 'Debe seleccionar un parentesco';
+  if (!termsAccepted) return 'Debes aceptar los términos y condiciones';
     return null;
   };
 
@@ -267,8 +269,28 @@ export default function RegistroScreen({ navigation }: RegistroScreenProps) {
           </View>
         )}
 
+        {/* Checkbox Términos y condiciones */}
+        <Pressable
+          onPress={() => setTermsAccepted(v => !v)}
+          style={styles.termsRow}
+          disabled={loading}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: termsAccepted }}
+        >
+          <View style={[styles.checkboxBox, termsAccepted && { backgroundColor: colors.primary }]}>
+            {termsAccepted && <Ionicons name="checkmark" size={16} color="#fff" />}
+          </View>
+          <Text style={styles.termsText}>
+            Autorizo a Vocare a almacenar una replicación de voz entregada por el usuario
+          </Text>
+        </Pressable>
+
         {/* Botón continuar */}
-        <Pressable style={styles.btn} onPress={onContinuar} disabled={loading}>
+        <Pressable 
+          style={[styles.btn, (!termsAccepted || loading) && { opacity: 0.6 }]}
+          onPress={onContinuar} 
+          disabled={loading || !termsAccepted}
+        >
           {loading
             ? <ActivityIndicator color="#fff" />
             : <Text style={styles.btnLabel}>Continuar</Text>
@@ -447,6 +469,29 @@ const styles = StyleSheet.create({
     alignItems: 'center', 
     justifyContent: 'center',
     paddingVertical: 14,
+  },
+  termsRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginTop: 8,
+    marginBottom: 6,
+  },
+  checkboxBox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+    backgroundColor: '#fff',
+  },
+  termsText: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 12,
+    lineHeight: 18,
   },
   btnLabel: {
     color: '#fff', 
