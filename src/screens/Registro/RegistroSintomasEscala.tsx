@@ -36,9 +36,12 @@ const frecuencias = [
   { value: 3, label: '3' },
 ];
 
-export default function RegistroSintomasConductuales({ navigation }: any) {
+export default function RegistroSintomasConductuales({ navigation, route }: any) {
   // { [key]: frecuencia }
   const [seleccionados, setSeleccionados] = useState<{ [key: string]: number | null }>({});
+
+  // ✅ RECIBIR grupo_uuid DESDE LOS PARÁMETROS
+  const grupo_uuid = route?.params?.grupo_uuid;
 
   const handleSelect = (key: string, freq: number) => {
     setSeleccionados((prev) => ({
@@ -56,10 +59,11 @@ export default function RegistroSintomasConductuales({ navigation }: any) {
 
     // ✅ GUARDAR SÍNTOMAS CONDUCTUALES EN LA BASE DE DATOS
     try {
-      const grupo_uuid = await StorageService.getGroupUuid();
+      // ✅ USAR grupo_uuid DE LOS PARÁMETROS O FALLBACK A STORAGE
+      const currentGroupUuid = grupo_uuid || await StorageService.getGroupUuid();
       
       // ✅ VERIFICAR QUE grupo_uuid NO SEA NULL
-      if (!grupo_uuid) {
+      if (!currentGroupUuid) {
         console.error('❌ [SÍNTOMAS CONDUCTUALES] No se encontró grupo_uuid');
         Alert.alert('Error', 'No se pudo identificar el grupo familiar');
         return;
@@ -69,10 +73,11 @@ export default function RegistroSintomasConductuales({ navigation }: any) {
         if (frecuencia !== null && frecuencia !== undefined) {
           const sintoma = sintomasConductuales.find(s => s.key === key);
           if (sintoma) {
-            // ✅ SIMPLIFICAR - SOLO USAR EL CAMPO 'name' COMO EN LA DB
+            // ✅ USAR LA ESTRUCTURA CORRECTA
             await addSymptomByGroup({
-              name: `${sintoma.label} (Frecuencia: ${frecuencia})`
-            }, grupo_uuid);
+              nombre: `${sintoma.label} (Frecuencia: ${frecuencia})`,
+              descripcion: `Síntoma conductual con frecuencia nivel ${frecuencia}`
+            }, currentGroupUuid);
           }
         }
       }
@@ -83,7 +88,7 @@ export default function RegistroSintomasConductuales({ navigation }: any) {
       // Continuar aunque falle - no bloquear el flujo
     }
 
-    navigation.navigate('RegistroListo');
+    navigation.navigate('RegistroListo', { grupo_uuid: grupo_uuid });
   };
 
   return (

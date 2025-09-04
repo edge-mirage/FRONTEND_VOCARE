@@ -41,14 +41,14 @@ async function mockEnviarSintomas({
   grupo_uuid,
 }: {
   sintomas: string[];
-  grupo_uuid?: string; // ✅ CAMBIAR DE paciente_id A grupo_uuid
+  grupo_uuid?: string;
 }) {
   await new Promise<void>(resolve => setTimeout(() => resolve(), 600));
   if (__DEV__) console.log('[MOCK] Enviando síntomas:', sintomas, grupo_uuid);
   return { ok: true };
 }
 
-// ✅ SIMPLIFICAR - USAR DIRECTAMENTE LA FUNCIÓN DE PACIENT.TS
+// ✅ FUNCIÓN REAL PARA ENVIAR SÍNTOMAS
 async function enviarSintomasBatch({
   sintomas,
   grupo_uuid,
@@ -56,12 +56,9 @@ async function enviarSintomasBatch({
   sintomas: string[];
   grupo_uuid?: string;
 }) {
-  // Usar la misma lógica que SintomasScreen.tsx
   const requests = sintomas.map(nombre => 
     addSymptomByGroup({
-      name: nombre,
       nombre: nombre,
-      description: '',
       descripcion: ''
     }, grupo_uuid)
   );
@@ -69,7 +66,7 @@ async function enviarSintomasBatch({
   return Promise.all(requests);
 }
 
-// ✅ CORREGIR EL HOOK useApi
+// ✅ HOOK useApi
 const useApi = () =>
   useMemo(
     () => ({
@@ -107,15 +104,14 @@ export default function RegistroSintomasPaciente({ navigation, route }: any) {
         return;
       }
 
-      // ✅ ENVIAR SÍNTOMAS SIMPLIFICADOS (SOLO 'name')
-      for (const nombre of seleccionados) {
-        await addSymptomByGroup({
-          name: nombre
-        }, grupo_uuid);
-      }
+      // ✅ USAR LA API CONFIGURADA
+      await api.enviarSintomas({
+        sintomas: seleccionados,
+        grupo_uuid
+      });
       
       console.log('✅ [SÍNTOMAS] Síntomas registrados para grupo:', grupo_uuid);
-      navigation.navigate('RegistroSintomasEscala');
+      navigation.navigate('RegistroSintomasEscala', { grupo_uuid });
     } catch (error: any) {
       console.error('❌ [SÍNTOMAS] Error:', error);
       Alert.alert('Error', error?.message || 'Error al enviar síntomas');
@@ -129,55 +125,34 @@ export default function RegistroSintomasPaciente({ navigation, route }: any) {
       style={{ flex: 1, backgroundColor: colors.primary + '10' }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        <Text style={styles.titulo}>Síntomas</Text>
+      <ScrollView contentContainerStyle={styles.container}>
+        <Text style={styles.titulo}>Síntomas físicos</Text>
         <Text style={styles.descripcion}>
-          Conteste las siguientes preguntas de manera{'\n'}
-          que mejor se ajuste al estado actual de la persona que tiene al cuidado.{'\n'}
-          <Text style={{ color: colors.text + '99' }}>
-            Esta información la podrá editar posteriormente.
-          </Text>
+          Selecciona los síntomas que presenta la persona cuidada:
         </Text>
 
-        <Text style={styles.subtitulo}>Síntomas Físicos (Si/No)</Text>
+        <Text style={styles.subtitulo}>Lista de síntomas:</Text>
 
-        {/* Lista de síntomas */}
-        {sintomasAlzheimer.map((nombre) => {
+        {sintomasAlzheimer.map((nombre, index) => {
           const isSelected = seleccionados.includes(nombre);
           return (
             <Pressable
-              key={nombre}
-              style={[
-                styles.item,
-                { opacity: loading ? 0.6 : 1 }
-              ]}
-              onPress={() => !loading && toggleSintoma(nombre)}
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: isSelected }}
+              key={index}
+              style={styles.item}
+              onPress={() => toggleSintoma(nombre)}
               disabled={loading}
             >
-              <View style={[
-                styles.checkbox,
-                {
-                  backgroundColor: isSelected ? colors.primary : 'transparent',
-                }
-              ]}>
-                {isSelected && (
-                  <Ionicons name="checkmark" size={20} color="#fff" />
-                )}
+              <View style={[styles.checkbox, isSelected && { backgroundColor: colors.primary }]}>
+                {isSelected && <Ionicons name="checkmark" size={18} color="#fff" />}
               </View>
               <Text style={styles.itemText}>{nombre}</Text>
             </Pressable>
           );
         })}
 
-        {/* Botón continuar */}
         <Pressable 
-          style={[
-            styles.btn,
-            { opacity: loading ? 0.6 : 1 }
-          ]} 
-          onPress={handleContinuar} 
+          style={[styles.btn, loading && { opacity: 0.6 }]} 
+          onPress={handleContinuar}
           disabled={loading}
         >
           {loading ? (
@@ -187,14 +162,9 @@ export default function RegistroSintomasPaciente({ navigation, route }: any) {
           )}
         </Pressable>
 
-        {/* ✅ DEBUG INFO (SOLO EN DESARROLLO) */}
+        {/* Debug info */}
         {__DEV__ && grupo_uuid && (
-          <Text style={{ 
-            fontSize: 10, 
-            color: '#999', 
-            textAlign: 'center', 
-            marginTop: 16 
-          }}>
+          <Text style={{ fontSize: 10, color: '#999', textAlign: 'center', marginTop: 16 }}>
             Debug: grupo_uuid = {grupo_uuid.substring(0, 8)}...
           </Text>
         )}
