@@ -3,7 +3,7 @@ import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'ax
 import { StorageService } from '@/services/StorageService';
 import { doRefresh } from '@/services/AuthServices';
 
-// Cambia a true para tu server local (Android emulador usa 10.0.2.2)
+// Cambia a false para producción (usar servidor en la nube)
 const useLocalServer = false;
 const LOCAL_URL = 'http://10.0.2.2:8000';
 const PROD_URL = 'https://backend-vocare-production.up.railway.app';
@@ -19,8 +19,8 @@ const api: AxiosInstance = axios.create({
 api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
   const token = await StorageService.getAccessToken();
   if (token) {
-    config.headers = config.headers ?? {};
-    (config.headers as any).Authorization = `Bearer ${token}`;
+    config.headers = config.headers || {};
+    config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
 });

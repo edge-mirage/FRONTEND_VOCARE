@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { UUID } from 'crypto';
 
+// Cambiar este flag a false para usar el servidor en la nube (producción)
 const useLocalServer = false;
 const LOCAL_URL = 'http://10.0.2.2:8000';
 const PROD_URL = 'https://backend-vocare-production.up.railway.app';

@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { Alert } from 'react-native';
 
-// Cambiar este flag a false cuando uses el servidor en la nube
+// Cambiar este flag a false para usar el servidor en la nube (producción)
 const useLocalServer = false;
 
 const LOCAL_URL = 'http://10.0.2.2:8000'; // o 10.0.2.2 si estás usando emulador Android

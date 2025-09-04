@@ -22,7 +22,7 @@ type Props = NativeStackScreenProps<
 
 const API_URL = __DEV__
   ? 'http://10.0.2.2:8000/api/replicacion/audio'
-  : 'https://tu-dominio/api/replicacion/audio';
+  : 'https://backend-vocare-production.up.railway.app/api/replicacion/audio';
 
 type Status = 'review' | 'uploading' | 'errorUpload' | 'errorMatch';
 

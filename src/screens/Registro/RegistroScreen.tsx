@@ -4,6 +4,8 @@ import { View, Text, TextInput, Pressable, StyleSheet, Modal, ActivityIndicator,
 import { colors, spacing } from '@/theme';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import * as backendAuth from '@/crud/auth_api';
+import { crearGrupoFamiliar } from '@/crud/family';
+import { StorageService } from '@/services/StorageService';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RegistroStackParamList } from '@/navigation/types';
 
@@ -98,6 +100,34 @@ const useApi = () =>
       resendVerification: mockResendVerification,
     };
   }, []);
+
+// ✅ FUNCIÓN HELPER PARA CREAR FAMILY GROUP
+const createFamilyGroupHelper = async () => {
+  try {
+    console.log('🏗️ [FAMILY GROUP] Creando nuevo grupo familiar...');
+    const result = await crearGrupoFamiliar({
+      name: 'Grupo Familiar',
+      description: 'Grupo creado durante el registro'
+    });
+    
+    const grupo_uuid = result.uuid;
+    console.log('✅ [FAMILY GROUP] Grupo familiar creado exitosamente:', grupo_uuid);
+    
+    // Guardar en storage para uso posterior
+    await StorageService.setGroupUuid(grupo_uuid);
+    console.log('💾 [FAMILY GROUP] Grupo guardado en storage');
+    
+    return grupo_uuid;
+  } catch (error: any) {
+    console.error('❌ [FAMILY GROUP] Error creando grupo familiar:', {
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      message: error.message
+    });
+    throw error;
+  }
+};
 
 const parentescos = ['Padre/Madre', 'Hijo/a', 'Nieto/a', 'Cónyuge', 'Hermano/a', 'Otro'];
 
@@ -195,17 +225,79 @@ export default function RegistroScreen({ navigation }: RegistroScreenProps) {
           }
         }
       }
-      // ✅ MANEJO DE ERRORES DE RED
+      // ✅ MANEJO DE ERRORES DE RED O CUALQUIER ERROR - CONTINUAR AL FLUJO DE REGISTRO
       else if (error?.code === 'NETWORK_ERROR' || error?.message?.includes('Network Error')) {
-        errorMessage = '🌐 Error de conexión. Verifica tu internet y que el servidor esté funcionando.';
+        console.log('🌐 [REGISTRO] Error de red detectado, continuando al flujo de registro');
+        Alert.alert(
+          'Error de conexión',
+          'No se pudo verificar el correo por problemas de conexión. Continuaremos con el registro.',
+          [{
+            text: 'Continuar',
+            onPress: async () => {
+              // ✅ SALTAR DIRECTO AL FLUJO DE REGISTRO DE PACIENTE
+              if (grupoFamiliar.trim()) {
+                // Si hay grupo_uuid, el usuario se une a un grupo existente -> Login
+                console.log('📱 [REGISTRO] Error de red - Usuario se une a grupo existente, redirigiendo a Login');
+                navigation.getParent()?.goBack();
+              } else {
+                // ✅ Si NO hay grupo_uuid, intentar crear un grupo familiar nuevo
+                console.log('📱 [REGISTRO] Error de red - Usuario nuevo sin grupo, creando family group...');
+                try {
+                  const new_grupo_uuid = await createFamilyGroupHelper();
+                  console.log('✅ [REGISTRO] Family group creado, navegando a datos del paciente con:', new_grupo_uuid);
+                  navigation.navigate('RegistroDatosPaciente', { grupo_uuid: new_grupo_uuid });
+                } catch (familyError: any) {
+                  console.error('❌ [REGISTRO] Error creando family group:', familyError);
+                  // Si falla la creación del family group, continuar con el flujo anterior
+                  console.log('📱 [REGISTRO] Fallback - continuando a RegistroCuidadorOne');
+                  navigation.navigate('RegistroCuidadorOne');
+                }
+              }
+            }
+          }]
+        );
+        return; // ✅ SALIR SIN MOSTRAR EL BANNER DE VERIFICACIÓN
       }
       // ✅ MANEJO DE ERROR MOCK (para desarrollo)
       else if (error?.message?.includes('ya está registrado')) {
         errorMessage = '📧 Este email ya está registrado.\n\n¿Ya tienes una cuenta? Intenta iniciar sesión.';
       }
-      // ✅ OTROS ERRORES
-      else if (error?.message) {
-        errorMessage = error.message;
+      // ✅ OTROS ERRORES - TAMBIÉN CONTINUAR AL FLUJO DE REGISTRO
+      else {
+        console.log('⚠️ [REGISTRO] Otro error detectado, continuando al flujo de registro');
+        if (error?.message) {
+          errorMessage = error.message;
+        }
+        
+        Alert.alert(
+          'Error en el registro',
+          `${errorMessage}\n\nContinuaremos con el registro sin verificar el correo.`,
+          [{
+            text: 'Continuar',
+            onPress: async () => {
+              // ✅ SALTAR DIRECTO AL FLUJO DE REGISTRO DE PACIENTE
+              if (grupoFamiliar.trim()) {
+                // Si hay grupo_uuid, el usuario se une a un grupo existente -> Login
+                console.log('📱 [REGISTRO] Otro error - Usuario se une a grupo existente, redirigiendo a Login');
+                navigation.getParent()?.goBack();
+              } else {
+                // ✅ Si NO hay grupo_uuid, intentar crear un grupo familiar nuevo
+                console.log('📱 [REGISTRO] Otro error - Usuario nuevo sin grupo, creando family group...');
+                try {
+                  const new_grupo_uuid = await createFamilyGroupHelper();
+                  console.log('✅ [REGISTRO] Family group creado, navegando a datos del paciente con:', new_grupo_uuid);
+                  navigation.navigate('RegistroDatosPaciente', { grupo_uuid: new_grupo_uuid });
+                } catch (familyError: any) {
+                  console.error('❌ [REGISTRO] Error creando family group:', familyError);
+                  // Si falla la creación del family group, continuar con el flujo anterior
+                  console.log('📱 [REGISTRO] Fallback - continuando a RegistroCuidadorOne');
+                  navigation.navigate('RegistroCuidadorOne');
+                }
+              }
+            }
+          }]
+        );
+        return; // ✅ SALIR SIN MOSTRAR EL BANNER DE VERIFICACIÓN
       }
       
       Alert.alert('Error de Registro', errorMessage, [
@@ -251,12 +343,55 @@ export default function RegistroScreen({ navigation }: RegistroScreenProps) {
           }}]
         );
       } else {
-        // Si NO hay grupo_uuid, el usuario crea un grupo nuevo -> RegistroCuidadorOne
-        console.log('📱 [REGISTRO] Usuario nuevo sin grupo, continuando registro');
-        navigation.navigate('RegistroCuidadorOne');
+        // ✅ Si NO hay grupo_uuid, crear un grupo familiar nuevo
+        console.log('📱 [REGISTRO] Usuario nuevo sin grupo, creando family group...');
+        try {
+          const new_grupo_uuid = await createFamilyGroupHelper();
+          console.log('✅ [REGISTRO] Family group creado, navegando a datos del paciente con:', new_grupo_uuid);
+          navigation.navigate('RegistroDatosPaciente', { grupo_uuid: new_grupo_uuid });
+        } catch (familyError: any) {
+          console.error('❌ [REGISTRO] Error creando family group:', familyError);
+          Alert.alert(
+            'Error',
+            'No se pudo crear el grupo familiar. Continuaremos con el registro.',
+            [{ text: 'OK', onPress: () => navigation.navigate('RegistroCuidadorOne') }]
+          );
+        }
       }
     } catch (error: any) {
-      Alert.alert('Error', error?.message || 'Código de verificación inválido o expirado.');
+      // ✅ EN LUGAR DE MOSTRAR ERROR, CONTINUAR CON EL FLUJO DE REGISTRO
+      console.log('⚠️ [VERIFICACIÓN] Error en verificación de código, continuando con flujo:', error?.message);
+      
+      Alert.alert(
+        'Error de verificación',
+        'No se pudo verificar el código. Continuaremos con el registro.',
+        [{
+          text: 'Continuar',
+          onPress: async () => {
+            setShowBanner(false);
+            
+            // ✅ LÓGICA CONDICIONAL BASADA EN grupo_uuid (IGUAL QUE CUANDO ES EXITOSO)
+            if (grupoFamiliar.trim()) {
+              // Si hay grupo_uuid, el usuario se une a un grupo existente -> Login
+              console.log('📱 [VERIFICACIÓN] Error - Usuario se une a grupo existente, redirigiendo a Login');
+              navigation.getParent()?.goBack();
+            } else {
+              // ✅ Si NO hay grupo_uuid, intentar crear un grupo familiar nuevo
+              console.log('📱 [VERIFICACIÓN] Error - Usuario nuevo sin grupo, creando family group...');
+              try {
+                const new_grupo_uuid = await createFamilyGroupHelper();
+                console.log('✅ [VERIFICACIÓN] Family group creado, navegando a datos del paciente con:', new_grupo_uuid);
+                navigation.navigate('RegistroDatosPaciente', { grupo_uuid: new_grupo_uuid });
+              } catch (familyError: any) {
+                console.error('❌ [VERIFICACIÓN] Error creando family group:', familyError);
+                // Si falla la creación del family group, continuar con el flujo anterior
+                console.log('📱 [VERIFICACIÓN] Fallback - continuando a RegistroCuidadorOne');
+                navigation.navigate('RegistroCuidadorOne');
+              }
+            }
+          }
+        }]
+      );
     } finally {
       setVerificationLoading(false);
     }
