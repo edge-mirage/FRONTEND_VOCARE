@@ -7,11 +7,15 @@ import Header from '@/components/Header';
 import CardRow from '@/components/CardRow';
 import {colors, spacing} from '@/theme';
 import {ReplicacionStackParamList} from '@/navigation/types';
+import CardRowProgress from '@/components/CardRowProgress';
 
 type Nav = NativeStackNavigationProp<ReplicacionStackParamList>;
 
 export default function ReplicacionesHomeScreen() {
   const navigation = useNavigation<Nav>();
+
+  const MOCK_REPLICATION_PROGRESS = 25;
+
 
   return (
     <View style={styles.container}>
@@ -24,11 +28,12 @@ export default function ReplicacionesHomeScreen() {
           onPress={() => navigation.navigate('Informacion')}
         />
         <View style={{height: spacing.lg}} />
-        <CardRow
+        <CardRowProgress
           icon="mic-outline"
-          title="Replicar Voz"
+          title="Replicar mi voz"
           subtitle="Realice las tareas indicadas para replicar y registrar su voz"
-          onPress={() => navigation.navigate('Replicacion')}
+          progress={MOCK_REPLICATION_PROGRESS}
+          onPress={() => navigation.navigate('Replicacion')} // ajusta a tu ruta de tareas
         />
         <View style={{height: spacing.lg}} />
         <CardRow

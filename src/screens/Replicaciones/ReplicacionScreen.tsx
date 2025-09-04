@@ -1,17 +1,31 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import Header from '@/components/Header';
-import CardRow from '@/components/CardRow';
+import TaskRow from '@/components/TaskRow';
 import { colors, spacing } from '@/theme';
 import type { ReplicacionStackParamList } from '@/navigation/types';
 
 type Nav = NativeStackNavigationProp<ReplicacionStackParamList, 'Replicacion'>;
 
+// MOCK: 0 = pendiente, 1 = hecha (en el mock, la #2 está hecha)
+const TASKS_DONE_MOCK = [0, 1, 0, 0, 0, 0, 0, 0, 0] as const;
+
 export default function ReplicacionScreen() {
   const navigation = useNavigation<Nav>();
+
+  const tasks = useMemo(
+    () =>
+      Array.from({ length: 9 }).map((_, i) => ({
+        index: i + 1,
+        title: `Tarea de Lectura ${i + 1}`,
+        subtitle: 'Grabar audio leyendo el texto que se te presenta',
+        done: Boolean(TASKS_DONE_MOCK[i] ?? 0),
+      })),
+    []
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -32,34 +46,19 @@ export default function ReplicacionScreen() {
           Tareas de replicación
         </Text>
 
-        {/* Contenedor sin borde */}
-        <View style={{ padding: spacing.md }}>
-          <CardRow
-            icon="mic-outline"
-            title="1. Reconocimiento de voz"
-            subtitle="Grabar audio de 45 segundos repitiendo oraciones."
-            onPress={() => navigation.navigate('ReconocimientoVoz')}
-          />
-
-          <View style={{ height: spacing.lg }} />
-
-          <CardRow
-            icon="pulse-outline"
-            title="2. Fonética de palabras"
-            subtitle="Vamos a aprender cómo pronuncias algunas palabras…"
-            onPress={() => navigation.navigate('FoneticaPalabras')}
-          />
-
-          <View style={{ height: spacing.lg }} />
-
-          <CardRow
-            icon="heart-outline"
-            title="3. Viva Wanderers"
-            subtitle="Ingrese intereses y pasiones de la persona cuidada"
-            onPress={() => navigation.navigate('VivaWanderers')}
-          />
+        <View style={{ gap: spacing.md }}>
+          {tasks.map(t => (
+            <TaskRow
+              key={t.index}
+              title={t.title}
+              subtitle={t.subtitle}
+              done={t.done}
+              onPress={() => navigation.navigate('TareaLectura', { taskIndex: t.index })}
+            />
+          ))}
         </View>
       </ScrollView>
     </View>
   );
 }
+

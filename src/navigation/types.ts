@@ -18,8 +18,8 @@ export type PacienteStackParamList = {
 
 export type LlamadaStackParamList = {
   LlamadaHome: undefined;
-  LlamadaInstantanea: { voiceName?: string; number?: string } | undefined;
-  LlamadaActiva: { voiceName?: string | undefined; number?: string | undefined; pacientId: number; contextItemId: number };
+  LlamadaInstantanea: { voiceName?: string; voiceId?: string; number?: string } | undefined;
+  LlamadaActiva: { voiceName?: string | undefined; voiceId?: string; number?: string | undefined; pacientId: number; contextItemId: number };
   LlamadaRapida: undefined;
   AgendarLlamada: undefined;
   ContextosDeLlamada: undefined;
@@ -41,6 +41,7 @@ export type GrupoStackParamList = {
 export type ReplicacionStackParamList = {
   ReplicacionHome: undefined;
   Informacion: undefined;
+  TareaLectura: { taskIndex: number };
   Replicacion: { justRecorded?: boolean } | undefined; // ← permite el flag
   VocesRegistradas: undefined;
   ReconocimientoVoz: { reset?: boolean } | undefined;

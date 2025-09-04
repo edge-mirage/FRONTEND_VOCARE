@@ -23,11 +23,15 @@ const WS_BASE = Platform.select({
   ios:     'ws://10.250.108.210:8000',
 })!;
 const WS_PATH = Platform.select({
-  android: '/calls/ws/audio', // si realmente tienes /calls2 para Android
+  android: '/calls/ws/audio', // si realmente tienes /calls para Android
   ios:     '/calls/ws/audio',
 })!;
-const buildWsUrl = (pacientId: number, contextItemId: number) => {
-  const qs = `pacient_id=${encodeURIComponent(String(pacientId))}&id_contexto=${encodeURIComponent(String(contextItemId))}`;
+const buildWsUrl = (pacientId: number, contextItemId: number, voiceId: string) => {
+  const qs = [
+    `pacient_id=${encodeURIComponent(String(pacientId))}`,
+    `id_contexto=${encodeURIComponent(String(contextItemId))}`,
+    `voice_id=${encodeURIComponent(voiceId ?? '')}`, // "" = Por defecto (backend)
+  ].join('&');
   return `${WS_BASE}${WS_PATH}?${qs}`;
 };
 
@@ -45,6 +49,7 @@ export default function LlamadaActivaScreen() {
   const who = params?.voiceName ?? 'Voz replicada';
   const pacientId = params?.pacientId;
   const contextItemId = params?.contextItemId;
+  const voiceId = params?.voiceId ?? '';
 
   const [seconds, setSeconds] = useState(0);
   const [speaker, setSpeaker] = useState(false);
@@ -117,7 +122,7 @@ export default function LlamadaActivaScreen() {
   // conexión WS (pausa → reproduce → reanuda)
   function connectWS() {
     // Construimos la URL con las IDs que exige el backend
-    const url = buildWsUrl(pacientId, contextItemId);
+    const url = buildWsUrl(pacientId, contextItemId, voiceId);
     const ws = new WebSocket(url);
     wsRef.current = ws;
 

@@ -30,7 +30,7 @@ export default function AgendarLlamadasScreen() {
     if (!groupUuid) return; // aún sin uuid
     try {
       setLoading(true);
-      const rows = await listSchedulesByGroup(groupUuid); // 👈
+      const rows = await listSchedulesByGroup(groupUuid);
       setItems(rows.map(apiToUI));
     } catch (e: any) {
       console.warn('Error listSchedulesByGroup', e?.message || e);
@@ -38,7 +38,7 @@ export default function AgendarLlamadasScreen() {
     } finally {
       setLoading(false);
     }
-  }, [groupUuid]); // 👈
+  }, [groupUuid]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -46,7 +46,7 @@ export default function AgendarLlamadasScreen() {
   const add = async (payload: Omit<ScheduledCall, 'id'>) => {
     if (!groupUuid) return;
     try {
-      const created = await createSchedule(uiToApiCreate(payload, groupUuid)); // 👈
+      const created = await createSchedule(uiToApiCreate(payload, groupUuid));
       setItems(prev => [apiToUI(created), ...prev]);
     } catch {
       Alert.alert('Error', 'No se pudo crear la llamada.');

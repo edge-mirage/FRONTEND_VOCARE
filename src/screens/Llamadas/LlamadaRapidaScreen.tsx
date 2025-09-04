@@ -9,17 +9,10 @@ import Header from '@/components/Header';
 import { colors, spacing } from '@/theme';
 import { DURATION_OPTIONS } from '@/domain/schedule/options';
 import type { LlamadaStackParamList } from '@/navigation/types';
-import { useUserContexts } from '@/hooks/useUserContexts'; // 👈 solo contextos reales
+import { useUserContexts } from '@/hooks/useUserContexts';
+import { useGroupVoices } from '@/hooks/useGroupVoices';
 import { StorageService } from '@/services/StorageService';
 
-// ====== VOCES MOCK (se mantienen) ======
-const MOCK_VOICES = [
-  { id: 'v1', nombre: 'Camila' },
-  { id: 'v2', nombre: 'Marco' },
-  { id: 'v3', nombre: 'María' },
-  { id: 'v4', nombre: 'Andrés' },
-];
-// =======================================
 
 type Nav = NativeStackNavigationProp<LlamadaStackParamList, 'LlamadaRapida'>;
 
@@ -28,6 +21,7 @@ export default function LlamadaRapidaScreen() {
 
   // Contextos reales del usuario
   const { contexts, loading } = useUserContexts();
+  const { voices, loading: loadingVoices } = useGroupVoices();
 
   // Estado UI
   const [contextText, setContextText] = useState('');
@@ -45,8 +39,8 @@ export default function LlamadaRapidaScreen() {
   }, []);
 
   const voiceLabel = useMemo(
-    () => (voiceId ? MOCK_VOICES.find(v => v.id === voiceId)?.nombre : undefined),
-    [voiceId]
+    () => (voiceId ? (voices.find(v => v.id === voiceId)?.label ?? 'Por defecto') : 'Por defecto'),
+    [voiceId, voices]
   );
 
   const startCall = () => {
@@ -60,6 +54,7 @@ export default function LlamadaRapidaScreen() {
     }
     navigation.navigate('LlamadaActiva', {
       voiceName: voiceLabel ?? 'Voz replicada',
+      voiceId: voiceId ?? '',
       pacientId,
       contextItemId: Number(contextId),
       // si quieres, puedes pasar también durationMin
@@ -127,26 +122,30 @@ export default function LlamadaRapidaScreen() {
             </View>
           )}
 
-          {/* Voz replicada (MOCK) */}
+          {/* Voz replicada */}
           <Text style={styles.fieldLabel}>Voz replicada</Text>
           <Pressable style={styles.selectRow} onPress={() => setShowVoiceList(v => !v)}>
             <Text style={voiceLabel ? styles.selectValue : styles.selectPlaceholder}>
-              {voiceLabel ?? 'Seleccione una voz replicada a usar'}
+              {voiceLabel ?? 'Por defecto'}
             </Text>
             <Ionicons name="chevron-down" size={18} color={colors.text} />
           </Pressable>
 
           {showVoiceList && (
             <View style={styles.dropdown}>
-              {MOCK_VOICES.map(v => (
-                <Pressable
-                  key={v.id}
-                  onPress={() => { setVoiceId(v.id); setShowVoiceList(false); }}
-                  style={styles.dropdownItem}
-                >
-                  <Text style={styles.dropdownText}>{v.nombre}</Text>
-                </Pressable>
-              ))}
+              {loadingVoices ? (
+                <Text style={{ padding: spacing.md, color: colors.textMuted }}>Cargando voces…</Text>
+              ) : (
+                voices.map(v => (
+                  <Pressable
+                    key={v.id + v.label}
+                    onPress={() => { setVoiceId(v.id); setShowVoiceList(false); }}
+                    style={styles.dropdownItem}
+                  >
+                    <Text style={styles.dropdownText}>{v.label}</Text>
+                  </Pressable>
+                ))
+              )}
             </View>
           )}
 

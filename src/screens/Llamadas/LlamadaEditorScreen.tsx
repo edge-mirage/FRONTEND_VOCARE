@@ -10,7 +10,8 @@ import Header from '@/components/Header';
 import DayPill from '@/components/schedule/DayPill';
 import { colors, spacing } from '@/theme';
 import type { Weekday, ScheduledCall } from '@/domain/schedule/types';
-import { VOICE_OPTIONS, DURATION_OPTIONS } from '@/domain/schedule/options';
+import { DURATION_OPTIONS } from '@/domain/schedule/options';
+import { useGroupVoices } from '@/hooks/useGroupVoices';
 import type { LlamadaStackParamList } from '@/navigation/types';
 import { useGroupUuid } from '@/hooks/useGroupUuid';
 import { obtenerContextoPorGrupo } from '@/crud/family';
@@ -26,6 +27,7 @@ export default function LlamadaEditorScreen() {
   const initial = params?.initial;
 
   const { groupUuid } = useGroupUuid();
+  const { voices, loading: loadingVoices } = useGroupVoices();
 
   const [tab, setTab] = useState<'weekly'|'calendar'>(initial?.repeat?.type === 'oneoff' ? 'calendar' : 'weekly');
   const [time, setTime] = useState<Date>(initial?.timeISO ? new Date(initial.timeISO) : new Date());
@@ -89,11 +91,6 @@ export default function LlamadaEditorScreen() {
     params?.onSubmit?.(payload, initial?.id);
     navigation.goBack();
   }
-
-  const voiceLabel = useMemo(
-    () => (voiceId ? VOICE_OPTIONS.find(v=>v.id===voiceId)?.label : undefined),
-    [voiceId]
-  );
 
   return (
     <View style={{flex:1, backgroundColor: colors.background}}>
@@ -181,24 +178,30 @@ export default function LlamadaEditorScreen() {
           )}
 
           {/* voz replicada (de momento estático) */}
+          {/* voz replicada */}
           <Text style={styles.fieldLabel}>Voz replicada</Text>
           <Pressable style={styles.selectRow} onPress={()=>setShowVoiceList(v=>!v)}>
-            <Text style={voiceLabel ? styles.selectTextValue : styles.selectPlaceholder}>
-              {voiceLabel ?? 'Seleccione una voz replicada a usar'}
+            <Text style={voiceId ? styles.selectTextValue : styles.selectPlaceholder}>
+              {voiceId ? (voices.find(v => v.id === voiceId)?.label ?? 'Por defecto') : 'Por defecto'}
             </Text>
             <Ionicons name="chevron-down" size={18} color={colors.text} />
           </Pressable>
+
           {showVoiceList && (
             <View style={styles.dropdown}>
-              {VOICE_OPTIONS.map(v => (
-                <Pressable
-                  key={v.id}
-                  onPress={() => { setVoiceId(v.id); setShowVoiceList(false); }}
-                  style={styles.dropdownItem}
-                >
-                  <Text style={styles.dropdownText}>{v.label}</Text>
-                </Pressable>
-              ))}
+              {loadingVoices ? (
+                <Text style={{ padding: spacing.md, color: colors.textMuted }}>Cargando voces…</Text>
+              ) : (
+                voices.map(v => (
+                  <Pressable
+                    key={v.id + v.label}
+                    onPress={() => { setVoiceId(v.id); setShowVoiceList(false); }}
+                    style={styles.dropdownItem}
+                  >
+                    <Text style={styles.dropdownText}>{v.label}</Text>
+                  </Pressable>
+                ))
+              )}
             </View>
           )}
 

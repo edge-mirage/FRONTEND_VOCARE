@@ -10,6 +10,7 @@ import VocesRegistradasScreen from '@/screens/Replicaciones/VocesRegistradasScre
 import ReconocimientoVozScreen from '@/screens/Replicaciones/ReconocimientoVozScreen';
 import FoneticaPalabrasScreen from '@/screens/Replicaciones/FoneticaPalabrasScreen';
 import ReplicacionScreenSure from '@/screens/Replicaciones/ReplicacionScreenSure';
+import TareaLecturaScreen from '@/screens/Replicaciones/TareaLecturaScreen';
 
 
 
@@ -27,6 +28,7 @@ export default function ReplicacionStack() {
       <Stack.Screen name="VocesRegistradas" component={VocesRegistradasScreen} />
       <Stack.Screen name="ReconocimientoVoz" component={ReconocimientoVozScreen} />
       <Stack.Screen name="FoneticaPalabras" component={FoneticaPalabrasScreen} />
+      <Stack.Screen name="TareaLectura" component={TareaLecturaScreen} />
 
       <Stack.Screen
         name="ReplicacionScreenSure"
