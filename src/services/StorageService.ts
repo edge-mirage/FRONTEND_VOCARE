@@ -1,285 +1,168 @@
 // src/services/StorageService.ts
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const KEYS = {
+export type MinimalUser = {
+  id?: number;
+  group_uuid?: string | null;
+  voice_id?: string | null;
+  family_group_context_id?: number;
+  email?: string;
+  name?: string;
+  middle_name?: string;
+  last_name?: string;
+  dob?: string;
+  created_at?: string;
+};
+
+type Nullable<T> = T | null;
+
+export const KEYS = {
+  // Auth
+  ACCESS_TOKEN: '@auth/access_token',
+  REFRESH_TOKEN: '@auth/refresh_token',
+  USER: '@auth/user',
+
+  // Dominio
   PACIENT_ID: '@app/pacient_id',
   GROUP_UUID: '@app/group_uuid',
   VOICE_ID: '@app/voice_id',
   FAMILY_GROUP_CONTEXT_ID: '@app/family_group_context_id',
-};
-
-const ACCESS_KEY = '@auth/access_token';
-const REFRESH_KEY = '@auth/refresh_token';
-const USER_KEY   = '@auth/user';
+} as const;
 
 export class StorageService {
-  // Obtener el access token
-  static async getAccessToken() {
-    return AsyncStorage.getItem(ACCESS_KEY);
+  // ===== AUTH =====
+  static async getAccessToken(): Promise<Nullable<string>> {
+    return AsyncStorage.getItem(KEYS.ACCESS_TOKEN);
+  }
+  static async setAccessToken(token: string): Promise<void> {
+    await AsyncStorage.setItem(KEYS.ACCESS_TOKEN, token);
+  }
+  static async removeAccessToken(): Promise<void> {
+    await AsyncStorage.removeItem(KEYS.ACCESS_TOKEN);
   }
 
-  // Obtener el refresh token
-  static async getRefreshToken() {
-    return AsyncStorage.getItem(REFRESH_KEY);
+  static async getRefreshToken(): Promise<Nullable<string>> {
+    return AsyncStorage.getItem(KEYS.REFRESH_TOKEN);
+  }
+  static async setRefreshToken(token: string): Promise<void> {
+    await AsyncStorage.setItem(KEYS.REFRESH_TOKEN, token);
+  }
+  static async removeRefreshToken(): Promise<void> {
+    await AsyncStorage.removeItem(KEYS.REFRESH_TOKEN);
   }
 
-  // Guardar access token
-  static async setAccessToken(token: string) {
-    return AsyncStorage.setItem(ACCESS_KEY, token);
+  static async setUser(user: unknown): Promise<void> {
+    await AsyncStorage.setItem(KEYS.USER, JSON.stringify(user));
   }
-
-  // Guardar refresh token
-  static async setRefreshToken(token: string) {
-    return AsyncStorage.setItem(REFRESH_KEY, token);
-  }
-
-  // Remover access token
-  static async removeAccessToken() {
-    return AsyncStorage.removeItem(ACCESS_KEY);
-  }
-
-  // Remover refresh token
-  static async removeRefreshToken() {
-    return AsyncStorage.removeItem(REFRESH_KEY);
-  }
-
-  // Pacient ID
-  static async setPacientId(id: number): Promise<void> {
+  static async getUser<T = unknown>(): Promise<Nullable<T>> {
+    const raw = await AsyncStorage.getItem(KEYS.USER);
+    if (!raw) return null;
     try {
-      if (id === null || id === undefined) {
-        console.warn('⚠️ Intentando guardar pacient_id null/undefined');
-        return;
-      }
-      await AsyncStorage.setItem(KEYS.PACIENT_ID, id.toString());
-      console.log('💾 Pacient ID guardado:', id);
-    } catch (error) {
-      console.error('❌ Error guardando pacient_id:', error);
+      return JSON.parse(raw) as T;
+    } catch (e) {
+      console.warn('⚠️ USER corrupto en storage. Limpiando.', e);
+      await AsyncStorage.removeItem(KEYS.USER);
+      return null;
     }
   }
+  static async removeUser(): Promise<void> {
+    await AsyncStorage.removeItem(KEYS.USER);
+  }
 
+  static async clearSession(): Promise<void> {
+    await AsyncStorage.multiRemove([KEYS.ACCESS_TOKEN, KEYS.REFRESH_TOKEN, KEYS.USER]);
+  }
+
+  // ===== DOMINIO =====
+  static async setPacientId(pacientId: number): Promise<void> {
+    try {
+      await AsyncStorage.setItem('pacient_id', String(pacientId));
+    } catch (error) {
+      console.error('Error guardando pacient_id:', error);
+    }
+  }
   static async getPacientId(): Promise<number | null> {
     try {
-      const value = await AsyncStorage.getItem(KEYS.PACIENT_ID);
-      if (value === null || value === undefined || value === '') {
-        console.log('📭 No hay pacient_id almacenado');
-        return null;
-      }
-      const parsedId = parseInt(value, 10);
-      if (isNaN(parsedId)) {
-        console.warn('⚠️ pacient_id no es un número válido:', value);
-        return null;
-      }
-      console.log('📖 Pacient ID obtenido:', parsedId);
-      return parsedId;
+      const id = await AsyncStorage.getItem('pacient_id');
+      return id ? parseInt(id) : null;
     } catch (error) {
-      console.error('❌ Error obteniendo pacient_id:', error);
+      console.error('Error obteniendo pacient_id:', error);
       return null;
     }
   }
 
-  static async clearPacientId(): Promise<void> {
-    try { await AsyncStorage.removeItem(KEYS.PACIENT_ID); }
-    catch (e) { console.error('❌ Error limpiando pacient_id:', e); }
-  }
-
-  // Group UUID
-  static async setGroupUuid(uuid: string): Promise<void> {
+  static async setGroupUuid(groupUuid: string): Promise<void> {
     try {
-      if (!uuid || uuid.trim() === '') {
-        console.warn('⚠️ Intentando guardar group_uuid vacío');
-        return;
-      }
-      await AsyncStorage.setItem(KEYS.GROUP_UUID, uuid);
-      console.log('💾 Group UUID guardado:', uuid);
+      await AsyncStorage.setItem('group_uuid', groupUuid);
     } catch (error) {
-      console.error('❌ Error guardando group_uuid:', error);
+      console.error('Error guardando group_uuid:', error);
     }
   }
-
   static async getGroupUuid(): Promise<string | null> {
     try {
-      const value = await AsyncStorage.getItem(KEYS.GROUP_UUID);
-      if (!value || value.trim() === '') {
-        console.log('📭 No hay group_uuid almacenado');
-        return null;
-      }
-      console.log('📖 Group UUID obtenido:', value);
-      return value;
+      return await AsyncStorage.getItem(KEYS.GROUP_UUID);
     } catch (error) {
-      console.error('❌ Error obteniendo group_uuid:', error);
+      console.error('Error obteniendo group_uuid:', error);
       return null;
     }
   }
 
-  // Voice ID
   static async setVoiceId(voiceId: string): Promise<void> {
-    try {
-      if (!voiceId || voiceId.trim() === '') {
-        console.warn('⚠️ Intentando guardar voice_id vacío');
-        return;
-      }
-      await AsyncStorage.setItem(KEYS.VOICE_ID, voiceId);
-      console.log('💾 Voice ID guardado:', voiceId);
-    } catch (error) {
-      console.error('❌ Error guardando voice_id:', error);
+    if (!voiceId?.trim()) {
+      console.warn('⚠️ voice_id vacío');
+      return;
     }
+    await AsyncStorage.setItem(KEYS.VOICE_ID, voiceId);
+  }
+  static async getVoiceId(): Promise<Nullable<string>> {
+    const value = await AsyncStorage.getItem(KEYS.VOICE_ID);
+    return value?.trim() ? value : null;
   }
 
-  static async getVoiceId(): Promise<string | null> {
-    try {
-      const value = await AsyncStorage.getItem(KEYS.VOICE_ID);
-      if (!value || value.trim() === '') {
-        console.log('📭 No hay voice_id almacenado');
-        return null;
-      }
-      console.log('📖 Voice ID obtenido:', value);
-      return value;
-    } catch (error) {
-      console.error('❌ Error obteniendo voice_id:', error);
-      return null;
-    }
-  }
-
-  // Family Group Context ID
   static async setFamilyGroupContextId(contextId: number): Promise<void> {
-    try {
-      if (contextId === null || contextId === undefined) {
-        console.warn('⚠️ Intentando guardar family_group_context_id null/undefined');
-        return;
-      }
-      await AsyncStorage.setItem(KEYS.FAMILY_GROUP_CONTEXT_ID, contextId.toString());
-      console.log('💾 Family Group Context ID guardado:', contextId);
-    } catch (error) {
-      console.error('❌ Error guardando family_group_context_id:', error);
+    if (contextId === null || contextId === undefined) {
+      console.warn('⚠️ family_group_context_id null/undefined');
+      return;
     }
+    await AsyncStorage.setItem(KEYS.FAMILY_GROUP_CONTEXT_ID, String(contextId));
+  }
+  static async getFamilyGroupContextId(): Promise<Nullable<number>> {
+    const value = await AsyncStorage.getItem(KEYS.FAMILY_GROUP_CONTEXT_ID);
+    if (!value) return null;
+    const n = parseInt(value, 10);
+    return Number.isNaN(n) ? null : n;
   }
 
-  static async getFamilyGroupContextId(): Promise<number | null> {
+  // ===== HELPERS =====
+  static async initializeFromUser(user: MinimalUser | null | undefined): Promise<void> {
     try {
-      const value = await AsyncStorage.getItem(KEYS.FAMILY_GROUP_CONTEXT_ID);
-      if (value === null || value === undefined || value === '') {
-        console.log('📭 No hay family_group_context_id almacenado');
-        return null;
-      }
-      const parsedId = parseInt(value, 10);
-      if (isNaN(parsedId)) {
-        console.warn('⚠️ family_group_context_id no es un número válido:', value);
-        return null;
-      }
-      console.log('📖 Family Group Context ID obtenido:', parsedId);
-      return parsedId;
-    } catch (error) {
-      console.error('❌ Error obteniendo family_group_context_id:', error);
-      return null;
-    }
-  }
-
-  // Inicializar desde datos del usuario
-  static async initializeFromUser(user: any, pacient?: { id?: number } | null): Promise<void> {
-    try {
-      console.log('🔧 Inicializando StorageService desde usuario:', user);
-      
       if (!user) {
-        console.warn('⚠️ Usuario es null/undefined, no se puede inicializar');
+        console.warn('⚠️ Usuario null/undefined, no se inicializa storage');
         return;
       }
-
-      // Pacient ID
-      // if (user.id && typeof user.id === 'number') {
-      //   await this.setPacientId(user.id);
-      // } else {
-      //   console.warn('⚠️ user.id no es válido:', user.id);
-      // }
-
-      // Group UUID
-      if (user.group_uuid && typeof user.group_uuid === 'string') {
-        await this.setGroupUuid(user.group_uuid);
-      } else {
-        console.warn('⚠️ user.group_uuid no es válido:', user.group_uuid);
+      if (typeof user.id === 'number') await this.setPacientId(user.id);
+      if (typeof user.group_uuid === 'string') await this.setGroupUuid(user.group_uuid);
+      if (typeof user.voice_id === 'string') await this.setVoiceId(user.voice_id);
+      if (typeof user.family_group_context_id === 'number') {
+        await this.setFamilyGroupContextId(user.family_group_context_id);
       }
-
-      // Voice ID
-      if (user.voice_id && typeof user.voice_id === 'string') {
-        await this.setVoiceId(user.voice_id);
-      } else {
-        console.warn('⚠️ user.voice_id no es válido:', user.voice_id);
-      }
-      
-      // ✅ Pacient ID (si fue provisto)
-      if (pacient?.id && Number.isFinite(pacient.id)) {
-        await this.setPacientId(pacient.id as number);
-      } else { // si cambió de usuario o no hay paciente asociado, limpia para evitar stale
-        await this.clearPacientId();
-        console.warn('⚠️ No se estableció pacient_id (pacient ausente o inválido)');
-      }
-
-      console.log('✅ StorageService inicializado correctamente');
-    } catch (error) {
-      console.error('❌ Error inicializando StorageService:', error);
+    } catch (e) {
+      console.error('❌ Error en initializeFromUser:', e);
     }
   }
 
-  // Limpiar datos de la app
   static async clearAppData(): Promise<void> {
-    try {
-      console.log('🧹 Limpiando datos de la aplicación...');
-      await AsyncStorage.multiRemove(Object.values(KEYS));
-      console.log('✅ Datos de la aplicación limpiados');
-    } catch (error) {
-      console.error('❌ Error limpiando datos:', error);
-    }
+    await AsyncStorage.multiRemove(Object.values(KEYS));
   }
 
-  // Para debugging - obtener todos los datos almacenados
   static async getAllStoredData(): Promise<Record<string, string | null>> {
-    try {
-      const keys = Object.values(KEYS);
-      const values = await AsyncStorage.multiGet(keys);
-      const data: Record<string, string | null> = {};
-      
-      values.forEach(([key, value]) => {
-        data[key] = value;
-      });
-      
-      console.log('📊 Todos los datos almacenados:', data);
-      return data;
-    } catch (error) {
-      console.error('❌ Error obteniendo todos los datos:', error);
-      return {};
-    }
-  }
-
-  // Nuevo método para limpiar sesión al cerrar app
-  static async clearSessionOnAppClose(): Promise<void> {
-    try {
-      console.log('🧹 Iniciando limpieza de sesión...');
-      await StorageService.removeAccessToken();
-      await StorageService.removeRefreshToken();
-      console.log('✅ Sesión limpiada al cerrar app');
-    } catch (error) {
-      console.error('❌ Error limpiando sesión:', error);
-    }
-  }
-
-  // Método para verificar si hay sesión válida
-  static async hasValidSession(): Promise<boolean> {
-    const accessToken = await StorageService.getAccessToken();
-    return !!accessToken;
-  }
-
-  // Limpiar todo (incluyendo tokens)
-  static async clearAll(): Promise<void> {
-    try {
-      console.log('🧹 Limpiando TODOS los datos...');
-      await AsyncStorage.multiRemove([
-        ...Object.values(KEYS),
-        ACCESS_KEY,
-        REFRESH_KEY,
-        USER_KEY
-      ]);
-      console.log('✅ Todos los datos limpiados');
-    } catch (error) {
-      console.error('❌ Error limpiando todos los datos:', error);
-    }
+    const keys = Object.values(KEYS);
+    const pairs = await AsyncStorage.multiGet(keys);
+    return pairs.reduce<Record<string, string | null>>((acc, [k, v]) => {
+      acc[k] = v ?? null;
+      return acc;
+    }, {});
   }
 }
+
+export default StorageService;

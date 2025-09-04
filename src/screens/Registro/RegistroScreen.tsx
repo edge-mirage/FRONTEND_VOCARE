@@ -5,8 +5,9 @@ import { colors, spacing } from '@/theme';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 // ✅ AGREGAR IMPORTS PARA BACKEND
 import { register, verifyEmail, resendVerification } from '@/crud/auth';
+
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList } from '@/navigation/types';
+import { RegistroStackParamList } from '@/navigation/types'; // ✅ CAMBIAR EL IMPORT
 
 const parentescos = [
   'Padre/Madre',
@@ -17,7 +18,8 @@ const parentescos = [
   'Otro',
 ];
 
-type RegistroScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Registro'>;
+// ✅ CORREGIR EL TIPO DE NAVEGACIÓN
+type RegistroScreenNavigationProp = NativeStackNavigationProp<RegistroStackParamList, 'RegistroScreen'>;
 
 interface RegistroScreenProps {
   navigation: RegistroScreenNavigationProp;
@@ -39,7 +41,7 @@ export default function RegistroScreen({ navigation }: RegistroScreenProps) {
   const [modalVisible, setModalVisible] = useState(false);
   const [verificationLoading, setVerificationLoading] = useState(false);
 
-  // ✅ VALIDACIONES
+  // ✅ VALIDACIONES - CAMBIAR A 8 CARACTERES
   const validateForm = (): string | null => {
     if (!nombre.trim()) return 'El nombre es requerido';
     if (!apellidos.trim()) return 'Los apellidos son requeridos';
@@ -47,7 +49,7 @@ export default function RegistroScreen({ navigation }: RegistroScreenProps) {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) return 'Email inválido';
     if (!password) return 'La contraseña es requerida';
-    if (password.length < 6) return 'La contraseña debe tener al menos 6 caracteres';
+    if (password.length < 8) return 'La contraseña debe tener al menos 8 caracteres'; // ✅ CAMBIAR A 8
     if (password !== confirmPassword) return 'Las contraseñas no coinciden';
     if (!parentesco) return 'Debe seleccionar un parentesco';
     return null;
@@ -90,7 +92,7 @@ export default function RegistroScreen({ navigation }: RegistroScreenProps) {
     }
   };
 
-  // ✅ VERIFICACIÓN DE CÓDIGO
+  // ✅ VERIFICACIÓN DE CÓDIGO CON LÓGICA CONDICIONAL CORREGIDA
   const handleVerifyCode = async () => {
     if (!verificationCode.trim() || verificationCode.length !== 6) {
       Alert.alert('Error', 'Ingresa un código de 6 dígitos válido');
@@ -106,15 +108,31 @@ export default function RegistroScreen({ navigation }: RegistroScreenProps) {
       });
 
       setShowBanner(false);
-      
-      Alert.alert(
-        '¡Cuenta Verificada!',
-        'Tu cuenta ha sido verificada exitosamente. Ahora puedes iniciar sesión.',
-        [{ 
-          text: 'Iniciar Sesión',
-          onPress: () => navigation.navigate('Login')
-        }]
-      );
+
+      // ✅ LÓGICA CONDICIONAL: Si hay grupo familiar, ir directo al AppHome
+      if (grupoFamiliar.trim()) {
+        console.log('🏠 [REGISTRO] Usuario con grupo familiar, navegando directamente a MainTabs');
+        
+        // ✅ USAR getParent() PARA NAVEGAR AL ROOT STACK
+        navigation.getParent()?.reset({
+          index: 0,
+          routes: [{ name: 'MainTabs' }],
+        });
+        
+      } else {
+        // Si no hay grupo familiar, continuar con el flujo normal
+        console.log('📝 [REGISTRO] Usuario sin grupo familiar, continuando flujo de registro');
+        
+        Alert.alert(
+          '¡Cuenta Verificada!',
+          'Tu cuenta ha sido verificada exitosamente. Ahora completaremos tu registro.',
+          [{ 
+            text: 'Continuar',
+            // ✅ AHORA SÍ FUNCIONA - NAVEGAR DENTRO DEL REGISTRO STACK
+            onPress: () => navigation.navigate('RegistroCuidadorOne')
+          }]
+        );
+      }
 
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Código de verificación inválido o expirado.');
@@ -129,6 +147,7 @@ export default function RegistroScreen({ navigation }: RegistroScreenProps) {
       await resendVerification({
         email: email.trim().toLowerCase()
       });
+      setVerificationCode(''); // Limpiar código anterior
       Alert.alert('Código Reenviado', 'Se ha enviado un nuevo código a tu email.');
     } catch (error: any) {
       Alert.alert('Error', 'No se pudo reenviar el código. Intenta más tarde.');
@@ -189,7 +208,7 @@ export default function RegistroScreen({ navigation }: RegistroScreenProps) {
         <Text style={styles.label}>Contraseña</Text>
         <TextInput
           style={styles.input}
-          placeholder="Mínimo 6 caracteres"
+          placeholder="Mínimo 8 caracteres" // ✅ CAMBIAR PLACEHOLDER
           value={password}
           onChangeText={setPassword}
           placeholderTextColor="#AAA"
@@ -237,6 +256,16 @@ export default function RegistroScreen({ navigation }: RegistroScreenProps) {
           placeholderTextColor="#AAA"
           editable={!loading}
         />
+        
+        {/* ✅ AGREGAR HINT VISUAL SI HAY GRUPO FAMILIAR */}
+        {grupoFamiliar.trim() && (
+          <View style={styles.groupHint}>
+            <Ionicons name="people-outline" size={16} color={colors.primary} />
+            <Text style={styles.groupHintText}>
+              Te unirás a un grupo familiar existente
+            </Text>
+          </View>
+        )}
 
         {/* Botón continuar */}
         <Pressable style={styles.btn} onPress={onContinuar} disabled={loading}>
@@ -256,22 +285,9 @@ export default function RegistroScreen({ navigation }: RegistroScreenProps) {
         animationType="slide"
         onRequestClose={() => setModalVisible(false)}
       >
-        <View style={{
-          flex: 1,
-          backgroundColor: 'rgba(0,0,0,0.2)',
-          justifyContent: 'center',
-          alignItems: 'center'
-        }}>
-          <View style={{
-            backgroundColor: '#fff',
-            borderRadius: 12,
-            padding: 24,
-            minWidth: '80%',
-            maxWidth: 340,
-            elevation: 4,
-            alignItems: 'stretch'
-          }}>
-            <Text style={{ fontWeight: '700', marginBottom: 16, textAlign: 'center' }}>Selecciona el parentesco:</Text>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Selecciona el parentesco:</Text>
             {parentescos.map(item => (
               <TouchableOpacity
                 key={item}
@@ -279,17 +295,13 @@ export default function RegistroScreen({ navigation }: RegistroScreenProps) {
                   setParentesco(item);
                   setModalVisible(false);
                 }}
-                style={{
-                  paddingVertical: 12,
-                  borderBottomWidth: 0.5,
-                  borderBottomColor: '#EEE'
-                }}
+                style={styles.modalOption}
               >
-                <Text style={{ color: '#222', fontSize: 16 }}>{item}</Text>
+                <Text style={styles.modalOptionText}>{item}</Text>
               </TouchableOpacity>
             ))}
-            <Pressable onPress={() => setModalVisible(false)} style={{ marginTop: 16 }}>
-              <Text style={{ color: colors.primary, textAlign: 'center' }}>Cancelar</Text>
+            <Pressable onPress={() => setModalVisible(false)} style={styles.modalCancel}>
+              <Text style={styles.modalCancelText}>Cancelar</Text>
             </Pressable>
           </View>
         </View>
@@ -304,7 +316,7 @@ export default function RegistroScreen({ navigation }: RegistroScreenProps) {
       >
         <View style={styles.overlay}>
           <View style={styles.banner}>
-            <Ionicons name="reload-circle-outline" size={48} color={colors.primary} style={{ alignSelf: 'center', marginBottom: 12 }} />
+            <Ionicons name="mail-outline" size={48} color={colors.primary} style={{ alignSelf: 'center', marginBottom: 12 }} />
             <Text style={styles.bannerTitle}>
               Se envió un código de verificación a:{"\n"}
               <Text style={{ fontWeight: 'bold' }}>{email}</Text>
@@ -313,20 +325,10 @@ export default function RegistroScreen({ navigation }: RegistroScreenProps) {
               Inserte el código de 6 dígitos:
             </Text>
             
-            {/* ✅ HACER FUNCIONAL EL INPUT DE CÓDIGO */}
+            {/* ✅ INPUT DE CÓDIGO FUNCIONAL */}
             <View style={styles.codeContainer}>
               <TextInput
-                style={{
-                  fontSize: 32,
-                  letterSpacing: 6,
-                  color: colors.primary,
-                  fontWeight: '800',
-                  textAlign: 'center',
-                  borderBottomWidth: 2,
-                  borderBottomColor: colors.primary,
-                  paddingBottom: 4,
-                  minWidth: 200,
-                }}
+                style={styles.codeInput}
                 placeholder="______"
                 value={verificationCode}
                 onChangeText={setVerificationCode}
@@ -338,38 +340,40 @@ export default function RegistroScreen({ navigation }: RegistroScreenProps) {
             </View>
 
             {/* ✅ BOTONES DE ACCIÓN */}
-            <View style={{ flexDirection: 'row', marginTop: 20, justifyContent: 'space-around', width: '100%' }}>
+            <View style={styles.bannerButtons}>
               <Pressable 
                 onPress={handleVerifyCode}
-                disabled={verificationLoading}
-                style={{
-                  backgroundColor: colors.primary,
-                  paddingHorizontal: 20,
-                  paddingVertical: 10,
-                  borderRadius: 8,
-                  opacity: verificationLoading ? 0.6 : 1
-                }}
+                disabled={verificationLoading || verificationCode.length !== 6}
+                style={[
+                  styles.verifyButton,
+                  { opacity: (verificationLoading || verificationCode.length !== 6) ? 0.6 : 1 }
+                ]}
               >
                 {verificationLoading ? (
                   <ActivityIndicator color="#fff" size="small" />
                 ) : (
-                  <Text style={{ color: '#fff', fontWeight: '700' }}>Verificar</Text>
+                  <Text style={styles.verifyButtonText}>Verificar</Text>
                 )}
               </Pressable>
               
               <Pressable 
                 onPress={handleResendCode}
                 disabled={verificationLoading}
-                style={{
-                  paddingHorizontal: 20,
-                  paddingVertical: 10,
-                }}
+                style={styles.resendButton}
               >
-                <Text style={{ color: colors.primary, textDecorationLine: 'underline' }}>
-                  Reenviar
-                </Text>
+                <Text style={styles.resendButtonText}>Reenviar</Text>
               </Pressable>
             </View>
+
+            {/* ✅ MOSTRAR MENSAJE DIFERENTE SI HAY GRUPO FAMILIAR */}
+            {grupoFamiliar.trim() && (
+              <View style={styles.groupMessage}>
+                <Ionicons name="people" size={16} color={colors.primary} />
+                <Text style={styles.groupMessageText}>
+                  Después de verificar te unirás al grupo familiar
+                </Text>
+              </View>
+            )}
           </View>
         </View>
       </Modal>
@@ -377,16 +381,15 @@ export default function RegistroScreen({ navigation }: RegistroScreenProps) {
   );
 }
 
-// ✅ ACTUALIZAR ESTILOS
+// ✅ ESTILOS ACTUALIZADOS
 const styles = StyleSheet.create({
   container: { 
     flex: 1, 
     backgroundColor: '#fff',
   },
-  // ✅ NUEVO ESTILO PARA EL CONTENIDO DEL SCROLL
   scrollContent: { 
     padding: 24,
-    paddingBottom: 40, // Espacio extra al final
+    paddingBottom: 40,
   },
   logoWrap: {
     alignSelf: 'center', 
@@ -422,6 +425,21 @@ const styles = StyleSheet.create({
     marginBottom: 8, 
     backgroundColor: "#F8F7FC",
   },
+  // ✅ NUEVO: Hint para grupo familiar
+  groupHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E3F2FF',
+    padding: 8,
+    borderRadius: 6,
+    marginBottom: 12,
+  },
+  groupHintText: {
+    marginLeft: 6,
+    fontSize: 12,
+    color: colors.primary,
+    fontWeight: '600',
+  },
   btn: {
     marginTop: 20,
     backgroundColor: colors.primary,
@@ -434,6 +452,44 @@ const styles = StyleSheet.create({
     color: '#fff', 
     fontWeight: '700', 
     fontSize: 16
+  },
+  // Modal de parentesco
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 24,
+    minWidth: '80%',
+    maxWidth: 340,
+    elevation: 4,
+  },
+  modalTitle: {
+    fontWeight: '700',
+    marginBottom: 16,
+    textAlign: 'center',
+    fontSize: 16,
+  },
+  modalOption: {
+    paddingVertical: 12,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#EEE'
+  },
+  modalOptionText: {
+    color: '#222',
+    fontSize: 16
+  },
+  modalCancel: {
+    marginTop: 16,
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    color: colors.primary,
+    fontWeight: '600',
   },
   // Banner de verificación
   overlay: {
@@ -478,6 +534,51 @@ const styles = StyleSheet.create({
     letterSpacing: 6, 
     color: colors.primary, 
     fontWeight: '800', 
-    alignSelf: 'center' 
+    textAlign: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary,
+    paddingBottom: 4,
+    minWidth: 200,
+  },
+  bannerButtons: {
+    flexDirection: 'row',
+    marginTop: 20,
+    justifyContent: 'space-around',
+    width: '100%',
+    alignItems: 'center'
+  },
+  verifyButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  verifyButtonText: {
+    color: '#fff',
+    fontWeight: '700'
+  },
+  resendButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+  },
+  resendButtonText: {
+    color: colors.primary,
+    textDecorationLine: 'underline'
+  },
+  // ✅ NUEVO: Mensaje para grupo familiar
+  groupMessage: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 16,
+    padding: 12,
+    backgroundColor: '#E3F2FF',
+    borderRadius: 8,
+  },
+  groupMessageText: {
+    marginLeft: 6,
+    fontSize: 12,
+    color: colors.primary,
+    fontWeight: '600',
+    textAlign: 'center',
   },
 });

@@ -7,8 +7,28 @@ import { BASE_URL } from './auth';
 const PACIENT_BASE = `${BASE_URL}/pacients`;
 
 export const createPacient = async (pacientData: any) => {
-  const response = await api.post(`/pacients/`, pacientData);
-  return { data: response.data, status: response.status };
+  try {
+    console.log('📤 [API] Enviando datos del paciente:', pacientData);
+    
+    // ✅ ASEGURAR QUE LOS DATOS ESTÁN EN EL FORMATO CORRECTO
+    const formattedData = {
+      ...pacientData,
+      // Asegurar que grupo_uuid sea string si existe
+      grupo_uuid: pacientData.grupo_uuid ? String(pacientData.grupo_uuid) : undefined,
+      // Asegurar que interests sea array de objetos si existe
+      interests: Array.isArray(pacientData.interests) ? pacientData.interests : [],
+      // Asegurar que symptoms y events sean arrays
+      symptoms: pacientData.symptoms || [],
+      events: pacientData.events || []
+    };
+    
+    const response = await api.post(`/pacients/`, formattedData);
+    console.log('✅ [API] Paciente creado exitosamente:', response.data);
+    return { data: response.data, status: response.status };
+  } catch (error: any) {
+    console.error('❌ [API] Error creando paciente:', error);
+    throw error;
+  }
 };
 
 export const getPacients = async () => {

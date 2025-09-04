@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { colors, spacing } from '@/theme';
 import Header from '@/components/Header';
-import { login, resendVerification } from '@/crud/auth';
+import { login, resendVerification } from '@/crud/auth_api';
 import { useAuth } from '@/context/AuthContext';
 
 export default function LoginScreen({ navigation }: any) {
@@ -132,6 +132,8 @@ export default function LoginScreen({ navigation }: any) {
         isBlocked: e.isBlocked,
         isFailedAttempt: e.isFailedAttempt,
         isEmailNotVerified: e.isEmailNotVerified,
+        isWrongPassword: e.isWrongPassword, // ✅ AGREGAR DEBUG
+        isUserNotFound: e.isUserNotFound,   // ✅ AGREGAR DEBUG
         response: e.response,
         status: e.response?.status,
         data: e.response?.data
@@ -167,13 +169,27 @@ export default function LoginScreen({ navigation }: any) {
         return;
       }
       
-      // ✅ Manejar contraseña incorrecta (nuevo)
+      // ✅ MANEJAR CONTRASEÑA INCORRECTA ESPECÍFICAMENTE
       if (e.isWrongPassword) {
-        setError('Contraseña incorrecta');
+        setError('La contraseña que ingresaste es incorrecta');
         Alert.alert(
           '🔑 Contraseña Incorrecta',
-          'La contraseña que ingresaste es incorrecta. Por favor, verifica e intenta nuevamente.',
+          'La contraseña que ingresaste no coincide con tu cuenta. Por favor, verifica e intenta nuevamente.',
           [{ text: 'Reintentar', style: 'default' }]
+        );
+        return;
+      }
+      
+      // ✅ MANEJAR USUARIO NO ENCONTRADO ESPECÍFICAMENTE  
+      if (e.isUserNotFound) {
+        setError('No existe una cuenta con este email');
+        Alert.alert(
+          '👤 Usuario No Encontrado',
+          'No existe una cuenta registrada con este email. ¿Deseas crear una cuenta nueva?',
+          [
+            { text: 'Reintentar', style: 'cancel' },
+            { text: 'Crear Cuenta', onPress: handleRegister }
+          ]
         );
         return;
       }
@@ -194,7 +210,7 @@ export default function LoginScreen({ navigation }: any) {
               text: 'Ya tengo código',
               onPress: () => navigation.navigate('VerifyCode', { 
                 email, 
-                isEmailVerification: true  // ✅ AGREGAR FLAG
+                isEmailVerification: true
               })
             }
           ]
@@ -202,19 +218,64 @@ export default function LoginScreen({ navigation }: any) {
         return;
       }
       
-      // ✅ Manejar otros errores específicos
-      if (e.isUserNotFound) {
-        setError('Usuario no encontrado');
-      } else if (e.response?.status === 402) {
+      // ✅ MANEJAR ERRORES POR STATUS CODE ESPECÍFICO
+      if (e.response?.status === 401) {
         setError('Contraseña incorrecta');
-      } else if (e.response?.status === 200) {
-        // Si el status es 200 pero llegamos aquí, hay un problema con el parseo
-        console.error('❌ ERROR EXTRAÑO: Status 200 pero error en login');
-        console.error('❌ Response data:', e.response?.data);
-        setError('Error procesando respuesta del servidor');
-      } else {
-        setError('Error de conexión o servidor');
+        Alert.alert(
+          '🔑 Contraseña Incorrecta',
+          'La contraseña que ingresaste es incorrecta. Por favor, verifica e intenta nuevamente.',
+          [{ text: 'Reintentar', style: 'default' }]
+        );
+        return;
+      } else if (e.response?.status === 404) {
+        setError('Usuario no encontrado');
+        Alert.alert(
+          '👤 Usuario No Encontrado',
+          'No existe una cuenta registrada con este email. ¿Deseas crear una cuenta nueva?',
+          [
+            { text: 'Reintentar', style: 'cancel' },
+            { text: 'Crear Cuenta', onPress: handleRegister }
+          ]
+        );
+        return;
+      } else if (e.response?.status === 422) {
+        setError('Email no verificado');
+        Alert.alert(
+          '📧 Email No Verificado',
+          'Debes verificar tu email antes de poder iniciar sesión.',
+          [
+            { text: 'Cancelar', style: 'cancel' },
+            { 
+              text: 'Reenviar Código', 
+              onPress: () => handleResendVerification(email)
+            }
+          ]
+        );
+        return;
+      } else if (e.response?.status === 423) {
+        // Cuenta bloqueada - ya manejado arriba
+        return;
       }
+      
+      // ✅ MANEJAR ERRORES DE CONEXIÓN
+      if (e.code === 'NETWORK_ERROR' || e.message.includes('Network Error')) {
+        setError('Error de conexión. Verifica tu internet.');
+        Alert.alert(
+          '🌐 Error de Conexión',
+          'No se pudo conectar al servidor. Verifica tu conexión a internet e intenta nuevamente.',
+          [{ text: 'Reintentar', style: 'default' }]
+        );
+        return;
+      }
+      
+      // ✅ ERROR GENÉRICO SOLO SI NO SE CAPTURÓ NINGÚN CASO ESPECÍFICO
+      console.log('⚠️ ERROR NO MANEJADO ESPECÍFICAMENTE:', e.response?.status, e.message);
+      setError('Error iniciando sesión. Intenta nuevamente.');
+      Alert.alert(
+        '❌ Error',
+        'Ocurrió un error al iniciar sesión. Por favor, verifica tus datos e intenta nuevamente.',
+        [{ text: 'Reintentar', style: 'default' }]
+      );
       
     } finally {
       setLoading(false);
@@ -226,7 +287,8 @@ export default function LoginScreen({ navigation }: any) {
   };
 
   const handleRegister = () => {
-    navigation.navigate('Registro');
+    navigation.navigate('RegistroStack', { screen: 'RegistroScreen' });
+
   };
 
   return (

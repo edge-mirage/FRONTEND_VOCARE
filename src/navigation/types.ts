@@ -1,12 +1,25 @@
 // src/navigation/types.ts
 
 import type { ScheduledCall } from '@/domain/schedule/types';
+import type { NavigatorScreenParams } from '@react-navigation/native';
+
 
 export type HomeStackParamList = {
   AppHome: undefined;
   Cuenta: undefined;
   Configuracion: undefined;
 };
+
+export type RegistroStackParamList = {
+  RegistroScreen: undefined;
+  RegistroCuidadorOne: undefined;
+  RegistroDatosPaciente: undefined;
+  RegistroSolicitaGUID: undefined;
+  RegistroSintomasPaciente: undefined;
+  RegistroSintomasEscala: undefined;
+  RegistroListo: undefined;
+};
+
 
 export type PacienteStackParamList = {
   PacienteHome: undefined;
@@ -64,11 +77,9 @@ export type MainTabParamList = {
 export type RootStackParamList = {
   Login: undefined;
   RecoverPassword: undefined;
-  VerifyCode: {
-    email: string;
-    newPassword: string;
-  };
+  VerifyCode: { email: string; newPassword: string };
   MainTabs: undefined;
   HomeStack: undefined;
-  Registro: undefined;
+
+  RegistroStack: NavigatorScreenParams<RegistroStackParamList>;
 };

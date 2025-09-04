@@ -250,8 +250,8 @@ export async function login(body: LoginBody): Promise<AuthUser> {
       
       const errorMessage = error.response?.data?.detail || error.response?.data?.message || '';
       
-      // ✅ Manejar errores específicos del backend con códigos correctos
-      if (error.response?.status === 423) {  // ← Cambiar de 403 a 423
+      // ✅ MANEJAR ERRORES ESPECÍFICOS CON FLAGS CORRECTOS
+      if (error.response?.status === 423) {  
         // Error de cuenta bloqueada
         if (errorMessage.includes('bloqueada') || errorMessage.includes('blocked')) {
           const match = errorMessage.match(/(\d+)\s*minutos?/);
@@ -282,11 +282,19 @@ export async function login(body: LoginBody): Promise<AuthUser> {
         (customError as any).response = error.response;
         throw customError;
       } else if (error.response?.status === 401) {
-        // Credenciales incorrectas (contraseña incorrecta)
-        const customError = new Error(errorMessage || 'Contraseña incorrecta');
-        (customError as any).isWrongPassword = true;
-        (customError as any).response = error.response;
-        throw customError;
+        // ✅ CONTRASEÑA INCORRECTA - MANEJAR ESPECÍFICAMENTE
+        if (errorMessage.includes('Credenciales inválidas') || errorMessage.includes('contraseña') || errorMessage.toLowerCase().includes('password')) {
+          const customError = new Error('Contraseña incorrecta');
+          (customError as any).isWrongPassword = true;
+          (customError as any).response = error.response;
+          throw customError;
+        } else {
+          // Otros errores 401 (genérico)
+          const customError = new Error(errorMessage || 'Credenciales incorrectas');
+          (customError as any).isWrongPassword = true;
+          (customError as any).response = error.response;
+          throw customError;
+        }
       } else if (error.response?.status === 404) {
         // Usuario no encontrado
         const customError = new Error('Usuario no encontrado');
@@ -345,6 +353,13 @@ export async function login(body: LoginBody): Promise<AuthUser> {
           }
         }
       }
+    }
+    
+    // ✅ ERROR DE CONEXIÓN
+    if (error.code === 'NETWORK_ERROR' || error.message.includes('Network Error')) {
+      const networkError = new Error('Error de conexión al servidor');
+      (networkError as any).code = 'NETWORK_ERROR';
+      throw networkError;
     }
     
     throw error;

@@ -55,7 +55,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         } catch (e) {
           console.warn('⚠️ No fue posible resolver el paciente en este momento:', e);
         }
-        await StorageService.initializeFromUser(storedUser, pacient);
+        await StorageService.initializeFromUser(storedUser);
 
         console.log('✅ StorageService inicializado');
       } else {
