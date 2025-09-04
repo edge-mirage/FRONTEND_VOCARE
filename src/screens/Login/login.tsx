@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { colors, spacing } from '@/theme';
 import Header from '@/components/Header';
-import { login, resendVerification } from '@/crud/auth';
+import { login, resendVerification } from '@/crud/auth_api';
 import { useAuth } from '@/context/AuthContext';
 
 export default function LoginScreen({ navigation }: any) {
@@ -226,7 +226,8 @@ export default function LoginScreen({ navigation }: any) {
   };
 
   const handleRegister = () => {
-    navigation.navigate('Registro');
+    navigation.navigate('RegistroStack', { screen: 'RegistroScreen' });
+
   };
 
   return (
