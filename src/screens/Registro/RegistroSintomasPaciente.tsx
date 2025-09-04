@@ -14,7 +14,7 @@ import { colors, spacing } from '@/theme';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
 // Cambia esto para alternar entre mock y backend
-const USE_BACKEND = false;
+const USE_BACKEND = true; // ✅ CAMBIAR A true PARA USAR BACKEND
 
 // Síntomas físicos
 const sintomasAlzheimer = [
@@ -36,31 +36,54 @@ const sintomasAlzheimer = [
 // MOCK API
 async function mockEnviarSintomas({
   sintomas,
-  paciente_id,
-}: { sintomas: string[]; paciente_id?: string }) {
+  grupo_uuid,
+}: { sintomas: string[]; grupo_uuid?: string }) {
   await new Promise<void>(resolve => setTimeout(() => resolve(), 600));
-  if (__DEV__) console.log('[MOCK] Enviando síntomas:', sintomas, paciente_id);
+  if (__DEV__) console.log('[MOCK] Enviando síntomas:', sintomas, grupo_uuid);
   return { ok: true };
 }
 
 
 // BACKEND API
-import { insertarSintomasFisicos } from '../../crud/paciente_api';
+import { addSymptomByGroup } from '../../crud/pacient';
 // (ajusta la cantidad de ../ según tu estructura de carpetas)
 
+// ✅ FUNCIÓN PARA ENVIAR SÍNTOMAS AL BACKEND
+async function enviarSintomasAlBackend({
+  sintomas,
+  grupo_uuid,
+}: {
+  sintomas: string[];
+  grupo_uuid?: string;
+}) {
+  if (!grupo_uuid) {
+    throw new Error('grupo_uuid es requerido para el backend');
+  }
+  
+  const requests = sintomas.map(nombre => 
+    addSymptomByGroup({
+      nombre: nombre,
+      descripcion: ''
+    }, grupo_uuid)
+  );
+  
+  const results = await Promise.all(requests);
+  return { ok: true, results };
+}
 
-// 🟢 Corrige este hook (estaba OK, pero lo dejo explícito)
+
+// 🟢 Hook para API con nuevo backend
 const useApi = () =>
   useMemo(
     () => ({
-      enviarSintomas: USE_BACKEND ? insertarSintomasFisicos : mockEnviarSintomas,
+      enviarSintomas: USE_BACKEND ? enviarSintomasAlBackend : mockEnviarSintomas,
     }),
     []
   );
 
 export default function RegistroSintomasPaciente({ navigation, route }: any) {
   const api = useApi();
-  const paciente_id = route?.params?.paciente_id || null;
+  const grupo_uuid = route?.params?.grupo_uuid || null;
 
   const [seleccionados, setSeleccionados] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -79,13 +102,13 @@ export default function RegistroSintomasPaciente({ navigation, route }: any) {
 
     setLoading(true);
     try {
-      await api.enviarSintomas({ sintomas: seleccionados, paciente_id });
+      await api.enviarSintomas({ sintomas: seleccionados, grupo_uuid });
       if (USE_BACKEND) {
         Alert.alert('¡Síntomas registrados!', 'Se guardaron en la base de datos.');
       } else {
         Alert.alert('Síntomas registrados', seleccionados.join('\n'));
       }
-      navigation.navigate('RegistroSintomasEscala');
+      navigation.navigate('RegistroSintomasEscala', { grupo_uuid });
     } catch (e: any) {
       Alert.alert('Error al registrar síntomas', e?.message || 'Intenta de nuevo');
     } finally {

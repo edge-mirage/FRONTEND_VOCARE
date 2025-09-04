@@ -5,47 +5,115 @@ import { colors, spacing } from '@/theme';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RegistroStackParamList } from '@/navigation/types';
 import { useNavigation } from '@react-navigation/native';
-
+import api, { BASE_URL } from '@/crud/auth';
+import { StorageService } from '@/services/StorageService';
 // ===== Toggle rápido =====
-const USE_BACKEND = false;
+const USE_BACKEND = true; // ✅ CAMBIAR A true PARA USAR BACKEND REAL
 
 // ===== MOCK local =====
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(() => r(), ms));
-async function mockSetCaregiverRole(body: { is_primary: boolean }) {
-  await sleep(600);
-  if (__DEV__) console.log('[MOCK] caregiver_role =>', body.is_primary);
-  // Simula siempre ok
-  return { ok: true };
+
+async function mockCreateFamilyGroup() {
+  await sleep(400);
+  const grupo_uuid = `grupo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  if (__DEV__) console.log('[MOCK] Grupo creado:', grupo_uuid);
+  return { data: { uuid: grupo_uuid } };
+}
+
+// ✅ FUNCIÓN REAL PARA CREAR GRUPO FAMILIAR
+async function createFamilyGroup() {
+  try {
+    console.log('🏗️ [FAMILY GROUP] Iniciando creación del grupo familiar...');
+    console.log('🔗 [FAMILY GROUP] URL:', `${BASE_URL}/family-groups/`);
+    
+    const response = await api.post('/family-groups/', {
+      name: 'Grupo Familiar', // Nombre por defecto
+      description: 'Grupo creado durante el registro'
+    });
+    
+    const grupo_uuid = response.data.uuid;
+    console.log('✅ [FAMILY GROUP] Grupo familiar creado exitosamente:', grupo_uuid);
+    
+    // Guardar en storage para uso posterior
+    await StorageService.setGroupUuid(grupo_uuid);
+    console.log('💾 [FAMILY GROUP] Grupo guardado en storage');
+    
+    return { data: response.data };
+  } catch (error: any) {
+    console.error('❌ [FAMILY GROUP] Error creando grupo familiar:', {
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      message: error.message
+    });
+    throw error;
+  }
 }
 
 // ===== API conmutable =====
-import { setCaregiverRole as realSetCaregiverRole } from '@/crud/auth_api';
 const useApi = () =>
   useMemo(() => ({
-    setCaregiverRole: USE_BACKEND ? realSetCaregiverRole : mockSetCaregiverRole,
+    // ✅ OMITIR setCaregiverRole POR AHORA
+    createFamilyGroup: USE_BACKEND ? createFamilyGroup : mockCreateFamilyGroup,
   }), []);
 
 // ===== Tipos de navegación =====
 type Nav = NativeStackNavigationProp<RegistroStackParamList, 'RegistroCuidadorOne'>;
 
-export default function RegistroCuidadorOne() {
+export default function RegistroCuidadorOne({ route }: any) {
   const api = useApi();
   const navigation = useNavigation<Nav>();
 
   const [loading, setLoading] = useState<'yes' | 'no' | null>(null);
 
+  // ✅ OBTENER grupo_uuid DE LOS PARÁMETROS (si existe)
+  const grupo_uuid = route?.params?.grupo_uuid;
+
   const submit = async (is_primary: boolean) => {
     try {
       setLoading(is_primary ? 'yes' : 'no');
-      const res = await api.setCaregiverRole({ is_primary });
-      // Si el backend responde ok/200, navega
+      
+      // ✅ OMITIR LLAMADA A caregiver-role POR AHORA (NO ES NECESARIA)
+      console.log(`👤 Usuario seleccionó: ${is_primary ? 'Cuidador Principal' : 'No es Cuidador Principal'}`);
+      
       if (is_primary) {
-        navigation.navigate('RegistroDatosPaciente');
+        // ✅ SI ES CUIDADOR PRINCIPAL, CREAR GRUPO FAMILIAR
+        console.log('👑 Usuario es cuidador principal, creando grupo familiar...');
+        
+        const grupoResult = await api.createFamilyGroup();
+        const new_grupo_uuid = grupoResult.data.uuid;
+        
+        console.log('✅ [NAVIGATION] Navegando a RegistroDatosPaciente con grupo_uuid:', new_grupo_uuid);
+        navigation.navigate('RegistroDatosPaciente', { grupo_uuid: new_grupo_uuid });
+        
       } else {
-        navigation.navigate('RegistroSolicitaGUID');
+        // ✅ SI NO ES CUIDADOR PRINCIPAL, SOLICITAR CÓDIGO DE GRUPO
+        console.log('👤 Usuario no es cuidador principal, solicitando código de grupo');
+        navigation.navigate('RegistroSolicitaGUID', { grupo_uuid });
       }
     } catch (e: any) {
-      console.log('❌ caregiver-role error:', e?.message || e);
+      console.error('❌ [SUBMIT] Error en registro de cuidador:', {
+        message: e?.message,
+        status: e?.response?.status,
+        data: e?.response?.data
+      });
+      
+      // ✅ MOSTRAR ERROR AL USUARIO
+      let errorMessage = 'Hubo un error. Intenta nuevamente.';
+      
+      if (e.response?.status === 404) {
+        errorMessage = 'El servidor no tiene el endpoint requerido.';
+      } else if (e.response?.status >= 500) {
+        errorMessage = 'Error del servidor. Intenta más tarde.';
+      } else if (e.code === 'NETWORK_ERROR' || e.message?.includes('Network Error')) {
+        errorMessage = 'Error de conexión. Verifica tu internet.';
+      } else if (e.message) {
+        errorMessage = e.message;
+      }
+      
+      // Aquí podrías mostrar un Alert si importas Alert
+      console.error('🚨 [ERROR PARA USUARIO]:', errorMessage);
+      
     } finally {
       setLoading(null);
     }

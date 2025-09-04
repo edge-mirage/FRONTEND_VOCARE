@@ -7,8 +7,31 @@ import { BASE_URL } from './auth';
 const PACIENT_BASE = `${BASE_URL}/pacients`;
 
 export const createPacient = async (pacientData: any) => {
-  const response = await api.post(`/pacients/`, pacientData);
-  return { data: response.data, status: response.status };
+  console.log('📤 [PACIENT API] Enviando datos al backend:', JSON.stringify(pacientData, null, 2));
+  console.log('🔗 [PACIENT API] URL:', '/pacients/');
+  
+  try {
+    const response = await api.post(`/pacients/`, pacientData, {
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+    console.log('✅ [PACIENT API] Respuesta exitosa:', response.data);
+    return { data: response.data, status: response.status };
+  } catch (error: any) {
+    console.error('❌ [PACIENT API] Error en createPacient:', {
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      message: error.message,
+      config: {
+        url: error.config?.url,
+        method: error.config?.method,
+        data: error.config?.data
+      }
+    });
+    throw error;
+  }
 };
 
 export const getPacients = async () => {

@@ -1,5 +1,5 @@
 // src/screens/RegistroSintomasConductuales.tsx
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,10 @@ import {
   Alert,
 } from 'react-native';
 import { colors } from '@/theme';
+import { addSymptomByGroup } from '../../crud/pacient';
+
+// Cambia esto para alternar entre mock y backend
+const USE_BACKEND = true;
 
 const sintomasConductuales = [
   {
@@ -34,9 +38,67 @@ const frecuencias = [
   { value: 3, label: '3' },
 ];
 
-export default function RegistroSintomasConductuales({ navigation }: any) {
+// MOCK API
+async function mockEnviarSintomasConductuales({
+  sintomas,
+  grupo_uuid,
+}: {
+  sintomas: { [key: string]: number | null };
+  grupo_uuid?: string;
+}) {
+  await new Promise<void>(resolve => setTimeout(() => resolve(), 600));
+  if (__DEV__) console.log('[MOCK] Enviando síntomas conductuales:', sintomas, grupo_uuid);
+  return { ok: true };
+}
+
+// ✅ FUNCIÓN PARA ENVIAR SÍNTOMAS CONDUCTUALES AL BACKEND
+async function enviarSintomasConductualesAlBackend({
+  sintomas,
+  grupo_uuid,
+}: {
+  sintomas: { [key: string]: number | null };
+  grupo_uuid?: string;
+}) {
+  if (!grupo_uuid) {
+    throw new Error('grupo_uuid es requerido para el backend');
+  }
+  
+  // Filtrar solo los síntomas seleccionados (con valor != null)
+  const sintomasSeleccionados = Object.entries(sintomas)
+    .filter(([key, freq]) => freq !== null && freq !== undefined)
+    .map(([key, freq]) => ({
+      key,
+      freq,
+      label: sintomasConductuales.find(s => s.key === key)?.label || key
+    }));
+  
+  const requests = sintomasSeleccionados.map(({ key, freq, label }) => 
+    addSymptomByGroup({
+      nombre: `${label} (Frecuencia: ${freq})`,
+      descripcion: `Síntoma conductual con frecuencia ${freq}`
+    }, grupo_uuid)
+  );
+  
+  const results = await Promise.all(requests);
+  return { ok: true, results };
+}
+
+// Hook para API 
+const useApi = () =>
+  useMemo(
+    () => ({
+      enviarSintomasConductuales: USE_BACKEND ? enviarSintomasConductualesAlBackend : mockEnviarSintomasConductuales,
+    }),
+    []
+  );
+
+export default function RegistroSintomasConductuales({ navigation, route }: any) {
+  const api = useApi();
+  const grupo_uuid = route?.params?.grupo_uuid || null;
+  
   // { [key]: frecuencia }
   const [seleccionados, setSeleccionados] = useState<{ [key: string]: number | null }>({});
+  const [loading, setLoading] = useState(false);
 
   const handleSelect = (key: string, freq: number) => {
     setSeleccionados((prev) => ({
@@ -45,15 +107,27 @@ export default function RegistroSintomasConductuales({ navigation }: any) {
     }));
   };
 
-  const handleContinuar = () => {
+  const handleContinuar = async () => {
     const algunoMarcado = Object.values(seleccionados).some(v => v !== null && v !== undefined);
     if (!algunoMarcado) {
       Alert.alert('Selecciona al menos un síntoma con su frecuencia');
       return;
     }
 
-    navigation.navigate('RegistroListo');
-    Alert.alert('Síntomas registrados', JSON.stringify(seleccionados, null, 2));
+    setLoading(true);
+    try {
+      await api.enviarSintomasConductuales({ sintomas: seleccionados, grupo_uuid });
+      if (USE_BACKEND) {
+        Alert.alert('¡Síntomas conductuales registrados!', 'Se guardaron en la base de datos.');
+      } else {
+        Alert.alert('Síntomas registrados', JSON.stringify(seleccionados, null, 2));
+      }
+      navigation.navigate('RegistroListo', { grupo_uuid });
+    } catch (e: any) {
+      Alert.alert('Error al registrar síntomas', e?.message || 'Intenta de nuevo');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -107,8 +181,8 @@ export default function RegistroSintomasConductuales({ navigation }: any) {
           </View>
         ))}
 
-        <Pressable style={styles.btn} onPress={handleContinuar}>
-          <Text style={styles.btnLabel}>Continuar</Text>
+        <Pressable style={styles.btn} onPress={handleContinuar} disabled={loading}>
+          <Text style={styles.btnLabel}>{loading ? 'Guardando...' : 'Continuar'}</Text>
         </Pressable>
       </ScrollView>
     </KeyboardAvoidingView>

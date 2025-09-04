@@ -1,6 +1,6 @@
 // src/context/AuthContext.tsx
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { getUser, clearSession } from '@/crud/auth';
+import { getUser, clearSession } from '@/crud/auth_api';
 import { StorageService } from '@/services/StorageService';
 
 interface AuthContextType {

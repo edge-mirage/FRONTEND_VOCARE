@@ -1,9 +1,9 @@
 import axios from 'axios';
 import { UUID } from 'crypto';
 
-const useLocalServer = true;
+const useLocalServer = false;
 const LOCAL_URL = 'http://10.0.2.2:8000';
-const PROD_URL = 'https://tu-servidor.com';
+const PROD_URL = 'https://backend-vocare-production.up.railway.app';
 export const URL = useLocalServer ? LOCAL_URL : PROD_URL;
 
 // ================= FAMILY GROUP =================

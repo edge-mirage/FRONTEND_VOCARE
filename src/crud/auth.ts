@@ -4,9 +4,9 @@ import { StorageService } from '@/services/StorageService';
 import { doRefresh } from '@/services/AuthServices';
 
 // Cambia a true para tu server local (Android emulador usa 10.0.2.2)
-const useLocalServer = true;
+const useLocalServer = false;
 const LOCAL_URL = 'http://10.0.2.2:8000';
-const PROD_URL = 'https://tu-servidor.com';
+const PROD_URL = 'https://backend-vocare-production.up.railway.app';
 
 export const BASE_URL = useLocalServer ? LOCAL_URL : PROD_URL;
 
@@ -25,56 +25,6 @@ api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
   return config;
 });
 
-// ===== Response: manejo 401 con cola =====
-let isRefreshing = false;
-let subscribers: ((token: string | null) => void)[] = [];
 
-const subscribeTokenRefresh = (cb: (token: string | null) => void) => subscribers.push(cb);
-const onRefreshed = (token: string | null) => {
-  subscribers.forEach((cb) => cb(token));
-  subscribers = [];
-};
-
-api.interceptors.response.use(
-  (response) => response,
-  async (error: AxiosError) => {
-    const original = error.config as any;
-
-    if (error.response?.status !== 401 || original?._retry) {
-      throw error;
-    }
-    original._retry = true;
-
-    if (isRefreshing) {
-      const newToken = await new Promise<string | null>((resolve) => {
-        subscribeTokenRefresh(resolve);
-      });
-
-      if (newToken) {
-        original.headers = original.headers ?? {};
-        original.headers.Authorization = `Bearer ${newToken}`;
-        return api(original);
-      } else {
-        await StorageService.clearSession();
-        throw error;
-      }
-    }
-
-    isRefreshing = true;
-    try {
-      const data = await doRefresh(); // { access_token, ... }
-      const newAccess = data?.access_token ?? null;
-
-      onRefreshed(newAccess);
-      return api(original);
-    } catch (e) {
-      onRefreshed(null);
-      await StorageService.clearSession();
-      throw e;
-    } finally {
-      isRefreshing = false;
-    }
-  }
-);
 
 export default api;

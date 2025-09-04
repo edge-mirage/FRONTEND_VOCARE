@@ -10,10 +10,10 @@ export type HomeStackParamList = {
 
 export type RegistroStackParamList = {
   RegistroScreen: undefined;
-  RegistroCuidadorOne: undefined;
-  RegistroDatosPaciente: undefined;
-  RegistroSolicitaGUID: undefined;
-  RegistroSintomasPaciente: undefined;
+  RegistroCuidadorOne: { grupo_uuid?: string } | undefined;
+  RegistroDatosPaciente: { grupo_uuid?: string } | undefined;
+  RegistroSolicitaGUID: { grupo_uuid?: string } | undefined;
+  RegistroSintomasPaciente: { grupo_uuid?: string; paciente_id?: number } | undefined;
 };
 
 

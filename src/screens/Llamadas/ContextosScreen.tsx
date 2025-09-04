@@ -1,7 +1,7 @@
 // src/screens/Llamadas/ContextosScreen.tsx       
 import React, { useEffect, useState, useCallback } from 'react';
 import {
-  View, Text, FlatList, ActivityIndicator, Pressable, Modal, TextInput, Button, StyleSheet, RefreshControl, Alert
+  View, Text, FlatList, ActivityIndicator, Pressable, Modal, TextInput, Button, StyleSheet, RefreshControl, Alert, TouchableOpacity
 } from 'react-native';
 import { Ionicons } from '@react-native-vector-icons/ionicons';
 import Header from '@/components/Header';
@@ -193,6 +193,7 @@ export default function ContextosScreen() {
   };
 
   const handleEditContext = (item: ContextItem) => {
+    console.log('🔧 Editando contexto:', item.title);
     setEditingItem(item);
     setDraftTitle(item.title);
     setDraftDescription(item.description);
@@ -200,6 +201,7 @@ export default function ContextosScreen() {
   };
 
   const handleDeleteContext = (item: ContextItem) => {
+    console.log('🗑️ Preparando eliminación de:', item.title);
     setItemToDelete(item);
     setDeleteModalVisible(true);
   };
@@ -252,6 +254,7 @@ export default function ContextosScreen() {
 
   // ✅ También limpiar al abrir modal para crear (no editar):
   const openCreateModal = () => {
+    console.log('➕ Abriendo modal para crear nuevo contexto');
     setDraftTitle('');        // ✅ Limpiar antes de abrir
     setDraftDescription('');  // ✅ Limpiar antes de abrir
     setEditingItem(null);     // ✅ Asegurar que no está editando
@@ -271,38 +274,38 @@ export default function ContextosScreen() {
         data={items}
         keyExtractor={(item) => item.id.toString()}
         renderItem={({ item }) => (
-          <Pressable
-            style={styles.contextItem}
-            onPress={() => handleEditContext(item)}
-            android_ripple={{ color: 'rgba(0,0,0,0.05)' }}
-          >
+          <View style={styles.contextItem}>
+            {/* ✅ CONTENIDO PRINCIPAL SIN PRESSABLE PADRE */}
             <View style={styles.contextContent}>
               <Text style={styles.contextTitle}>{item.title}</Text>
               <Text style={styles.contextDescription}>{item.description}</Text>
             </View>
+            
+            {/* ✅ BOTONES DE ACCIÓN CON TOUCHABLEOPACITY */}
             <View style={styles.actionButtons}>
-              <Pressable
+              <TouchableOpacity
                 style={styles.actionButton}
-                onPress={(e) => {
-                  e.stopPropagation();
+                onPress={() => {
+                  console.log('🔧 Botón editar presionado para:', item.title);
                   handleEditContext(item);
                 }}
-                android_ripple={{ color: 'rgba(0,0,0,0.1)', radius: 20 }}
+                activeOpacity={0.7}
               >
                 <Ionicons name="pencil" size={18} color={colors.primary} />
-              </Pressable>
-              <Pressable
+              </TouchableOpacity>
+              
+              <TouchableOpacity
                 style={styles.actionButton}
-                onPress={(e) => {
-                  e.stopPropagation();
+                onPress={() => {
+                  console.log('🗑️ Botón eliminar presionado para:', item.title);
                   handleDeleteContext(item);
                 }}
-                android_ripple={{ color: 'rgba(255,0,0,0.1)', radius: 20 }}
+                activeOpacity={0.7}
               >
                 <Ionicons name="trash" size={18} color="#e74c3c" />
-              </Pressable>
+              </TouchableOpacity>
             </View>
-          </Pressable>
+          </View>
         )}
         refreshControl={
           <RefreshControl refreshing={loading} onRefresh={fetchContextos} tintColor={colors.primary} />
@@ -315,13 +318,16 @@ export default function ContextosScreen() {
         ) : null}
       />
 
-      <Pressable
+      <TouchableOpacity
         style={styles.fab}
-        onPress={openCreateModal}
-        android_ripple={{ color: 'rgba(255,255,255,0.25)' }}
+        onPress={() => {
+          console.log('➕ Botón FAB presionado');
+          openCreateModal();
+        }}
+        activeOpacity={0.8}
       >
         <Ionicons name="add" size={26} color="#fff" />
-      </Pressable>
+      </TouchableOpacity>
 
       <Modal
         visible={modalVisible}
@@ -361,8 +367,21 @@ export default function ContextosScreen() {
             </View>
 
             <View style={styles.modalButtons}>
-              <Button title="Cancelar" color="#888" onPress={resetModal} />
-              <Button title={editingItem ? 'Actualizar' : 'Guardar'} onPress={handleCreateContext} />
+              <Button 
+                title="Cancelar" 
+                color="#888" 
+                onPress={() => {
+                  console.log('❌ Botón Cancelar presionado');
+                  resetModal();
+                }} 
+              />
+              <Button 
+                title={editingItem ? 'Actualizar' : 'Guardar'} 
+                onPress={() => {
+                  console.log('💾 Botón Guardar/Actualizar presionado');
+                  handleCreateContext();
+                }} 
+              />
             </View>
           </View>
         </View>
@@ -383,8 +402,22 @@ export default function ContextosScreen() {
             <Text style={styles.confirmSubtitle}>Esta acción no se puede deshacer.</Text>
             
             <View style={styles.confirmButtons}>
-              <Button title="Cancelar" color="#888" onPress={cancelDelete} />
-              <Button title="Eliminar" color="#e74c3c" onPress={confirmDeleteContext} />
+              <Button 
+                title="Cancelar" 
+                color="#888" 
+                onPress={() => {
+                  console.log('❌ Cancelar eliminación');
+                  cancelDelete();
+                }} 
+              />
+              <Button 
+                title="Eliminar" 
+                color="#e74c3c" 
+                onPress={() => {
+                  console.log('🗑️ Confirmar eliminación');
+                  confirmDeleteContext();
+                }} 
+              />
             </View>
           </View>
         </View>

@@ -48,10 +48,10 @@ async function mockRegister(params: {
   if (!name) throw new Error('El nombre es requerido');
   if (!email) throw new Error('El email es requerido');
   if (!EMAIL_REGEX.test(email)) throw new Error('Email inválido');
-  if (!password || password.length < 6) throw new Error('La contraseña debe tener al menos 6 caracteres');
+  if (!password || password.length < 8) throw new Error('La contraseña debe tener al menos 8 caracteres');
   if (!relationship) throw new Error('Debe seleccionar un parentesco');
 
-  if (mockDB.has(email)) throw new Error('El email ya está registrado');
+  if (mockDB.has(email)) throw new Error('📧 Este email ya está registrado en el sistema.\n\n¿Ya tienes una cuenta? Intenta iniciar sesión.');
   const code = random6();
   const user: MockUser = {
     email, name, relationship, group_uuid,
@@ -120,6 +120,7 @@ export default function RegistroScreen({ navigation }: RegistroScreenProps) {
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [verificationLoading, setVerificationLoading] = useState(false);
+  const [acceptTerms, setAcceptTerms] = useState(false);
 
   const lastCodeRef = useRef<string | null>(null);
 
@@ -129,9 +130,10 @@ export default function RegistroScreen({ navigation }: RegistroScreenProps) {
     if (!email.trim()) return 'El email es requerido';
     if (!EMAIL_REGEX.test(email)) return 'Email inválido';
     if (!password) return 'La contraseña es requerida';
-    if (password.length < 6) return 'La contraseña debe tener al menos 6 caracteres';
+    if (password.length < 8) return 'La contraseña debe tener al menos 8 caracteres';
     if (password !== confirmPassword) return 'Las contraseñas no coinciden';
     if (!parentesco) return 'Debe seleccionar un parentesco';
+    if (!acceptTerms) return 'Debe aceptar los términos y condiciones';
     return null;
   };
 
@@ -164,12 +166,62 @@ export default function RegistroScreen({ navigation }: RegistroScreenProps) {
     } catch (error: any) {
       setLoading(false);
       let errorMessage = 'Hubo un error al registrar. Intenta nuevamente.';
-      if (error?.message?.includes('ya está registrado')) {
-        errorMessage = 'Este email ya está registrado. Intenta iniciar sesión.';
-      } else if (error?.message) {
+      
+      console.log('❌ [REGISTRO] Error completo:', error);
+      console.log('❌ [REGISTRO] Error response:', error?.response);
+      console.log('❌ [REGISTRO] Error status:', error?.response?.status);
+      console.log('❌ [REGISTRO] Error data:', error?.response?.data);
+      
+      // ✅ MANEJO ESPECÍFICO DE ERRORES DEL BACKEND
+      if (error?.response?.status === 400) {
+        const errorData = error.response.data;
+        
+        // ✅ Verificar si es error de email duplicado
+        if (errorData?.detail && typeof errorData.detail === 'string') {
+          if (errorData.detail.includes('already exists') || 
+              errorData.detail.includes('ya existe') ||
+              errorData.detail.includes('duplicate') ||
+              errorData.detail.includes('duplicado')) {
+            errorMessage = '📧 Este email ya está registrado.\n\n¿Ya tienes una cuenta? Intenta iniciar sesión.';
+          } else {
+            errorMessage = errorData.detail;
+          }
+        }
+        // ✅ Si es un array de errores de validación
+        else if (Array.isArray(errorData?.detail)) {
+          const firstError = errorData.detail[0];
+          if (firstError?.msg) {
+            errorMessage = firstError.msg;
+          }
+        }
+      }
+      // ✅ MANEJO DE ERRORES DE RED
+      else if (error?.code === 'NETWORK_ERROR' || error?.message?.includes('Network Error')) {
+        errorMessage = '🌐 Error de conexión. Verifica tu internet y que el servidor esté funcionando.';
+      }
+      // ✅ MANEJO DE ERROR MOCK (para desarrollo)
+      else if (error?.message?.includes('ya está registrado')) {
+        errorMessage = '📧 Este email ya está registrado.\n\n¿Ya tienes una cuenta? Intenta iniciar sesión.';
+      }
+      // ✅ OTROS ERRORES
+      else if (error?.message) {
         errorMessage = error.message;
       }
-      Alert.alert('Error', errorMessage);
+      
+      Alert.alert('Error de Registro', errorMessage, [
+        { 
+          text: 'Entendido',
+          style: 'default'
+        },
+        // ✅ OPCIÓN ADICIONAL SI ES EMAIL DUPLICADO
+        ...(errorMessage.includes('ya está registrado') ? [{
+          text: 'Ir a Login',
+          onPress: () => {
+            // Navegar al Login si el usuario quiere
+            navigation.getParent()?.goBack();
+          }
+        }] : [])
+      ]);
     }
   };
 
@@ -186,8 +238,23 @@ export default function RegistroScreen({ navigation }: RegistroScreenProps) {
       });
       setShowBanner(false);
 
-      // 🚩 Navega correctamente a la siguiente pantalla del registro
-      navigation.navigate('RegistroCuidadorOne');
+      // ✅ LÓGICA CONDICIONAL BASADA EN grupo_uuid
+      if (grupoFamiliar.trim()) {
+        // Si hay grupo_uuid, el usuario se une a un grupo existente -> Login
+        console.log('📱 [REGISTRO] Usuario se une a grupo existente, redirigiendo a Login');
+        Alert.alert(
+          '¡Registro exitoso!', 
+          'Te has unido al grupo familiar. Inicia sesión para continuar.',
+          [{ text: 'OK', onPress: () => {
+            // Navegar de vuelta al stack principal (fuera del registro)
+            navigation.getParent()?.goBack();
+          }}]
+        );
+      } else {
+        // Si NO hay grupo_uuid, el usuario crea un grupo nuevo -> RegistroCuidadorOne
+        console.log('📱 [REGISTRO] Usuario nuevo sin grupo, continuando registro');
+        navigation.navigate('RegistroCuidadorOne');
+      }
     } catch (error: any) {
       Alert.alert('Error', error?.message || 'Código de verificación inválido o expirado.');
     } finally {
@@ -239,7 +306,7 @@ export default function RegistroScreen({ navigation }: RegistroScreenProps) {
         <Text style={styles.label}>Número telefónico</Text>
         <TextInput style={styles.input} placeholder="Ingrese su número telefónico" value={numero} onChangeText={setNumero} placeholderTextColor="#AAA" editable={!loading} />        
         <Text style={styles.label}>Contraseña</Text>
-        <TextInput style={styles.input} placeholder="Mínimo 6 caracteres" value={password} onChangeText={setPassword} placeholderTextColor="#AAA" secureTextEntry editable={!loading} />
+        <TextInput style={styles.input} placeholder="Mínimo 8 caracteres" value={password} onChangeText={setPassword} placeholderTextColor="#AAA" secureTextEntry editable={!loading} />
         <Text style={styles.label}>Confirmar contraseña</Text>
         <TextInput style={styles.input} placeholder="Repita su contraseña" value={confirmPassword} onChangeText={setConfirmPassword} placeholderTextColor="#AAA" secureTextEntry editable={!loading} />
         <Text style={styles.label}>Fecha de nacimiento (opcional)</Text>
@@ -251,6 +318,23 @@ export default function RegistroScreen({ navigation }: RegistroScreenProps) {
         
         <Text style={styles.label}>Código de grupo familiar (opcional)</Text>
         <TextInput style={styles.input} placeholder="Si tienes un código de grupo, ingrésalo aquí" value={grupoFamiliar} onChangeText={setGrupoFamiliar} placeholderTextColor="#AAA" editable={!loading} />
+        
+        {/* Checkbox de términos y condiciones */}
+        <Pressable 
+          style={styles.checkboxContainer} 
+          onPress={() => !loading && setAcceptTerms(!acceptTerms)}
+          disabled={loading}
+        >
+          <View style={[styles.checkbox, acceptTerms && styles.checkboxSelected]}>
+            {acceptTerms && (
+              <Ionicons name="checkmark" size={16} color="#fff" />
+            )}
+          </View>
+          <Text style={styles.checkboxText}>
+            Acepto que se nos permita replicar mi voz para fines de la aplicación*
+          </Text>
+        </Pressable>
+        
         {/* Botón continuar */}
         <Pressable style={styles.btn} onPress={onContinuar} disabled={loading}>
           {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnLabel}>Continuar</Text>}
@@ -381,4 +465,32 @@ const styles = StyleSheet.create({
   },
   bannerSubtitle: { color: colors.text, fontSize: 16, marginBottom: 16, textAlign: 'center' },
   codeContainer: { marginTop: 10, marginBottom: 10, flexDirection: 'row', justifyContent: 'center' },
+  checkboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderWidth: 2,
+    borderColor: '#DDD',
+    borderRadius: 4,
+    marginRight: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    marginTop: 2,
+  },
+  checkboxSelected: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  checkboxText: {
+    flex: 1,
+    fontSize: 14,
+    color: colors.text,
+    lineHeight: 20,
+  },
 });
