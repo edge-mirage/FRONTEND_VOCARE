@@ -44,12 +44,6 @@ export type ReplicacionStackParamList = {
   TareaLectura: { taskIndex: number };
   Replicacion: { justRecorded?: boolean } | undefined; // ← permite el flag
   VocesRegistradas: undefined;
-  ReconocimientoVoz: { reset?: boolean } | undefined;
-  FoneticaPalabras: undefined;
-  VivaWanderers: undefined;
-  ReplicacionScreenSure: {
-    audio: { uri: string; durationSec: number; createdAt: number };
-  };
 };
 
 

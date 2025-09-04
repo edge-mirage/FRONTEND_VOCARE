@@ -1,13 +1,20 @@
-// src/screens/Replicacion/TareaLecturaScreen.tsx
-import React, { useMemo } from 'react';
-import { View, Text, ScrollView } from 'react-native';
+// src/screens/Replicaciones/TareaLecturaScreen.tsx
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Text, ScrollView, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import RNFS from 'react-native-fs';
+
 import Header from '@/components/Header';
 import ReferenceTextBox from '@/components/ReferenceTextBox';
 import RecordMicButton from '@/components/RecordMicButton';
+import RecordingBar from '@/components/RecordingBar';
+
 import { colors, spacing } from '@/theme';
 import type { ReplicacionStackParamList } from '@/navigation/types';
+
+import { useM4aRecorder } from '@/hooks/useM4aRecorder';
+import { uploadAudioTask } from '@/crud/voice_training';
 
 type Nav = NativeStackNavigationProp<ReplicacionStackParamList, 'TareaLectura'>;
 type Rt  = RouteProp<ReplicacionStackParamList, 'TareaLectura'>;
@@ -36,6 +43,52 @@ export default function TareaLecturaScreen() {
     [taskIndex]
   );
 
+  const { recording, timer, fileUri, start, stop, deleteFile } = useM4aRecorder();
+  const [uploading, setUploading] = useState(false);
+
+  useEffect(() => () => { deleteFile(); }, [deleteFile]);
+
+  async function onStart() {
+    await start();
+  }
+
+  async function onStop() {
+    if (uploading) return;
+    setUploading(true);
+    try {
+      const uri = await stop();  // file://...m4a (si todo va bien)
+      if (!uri) {
+        Alert.alert('Error', 'No se generó el archivo de audio.');
+        return;
+      }
+
+      // sanity check
+      const fsPath = uri.replace('file://', '');
+      const exists = await RNFS.exists(fsPath);
+      const st = exists ? await RNFS.stat(fsPath) : null;
+      if (!exists || !st?.size) {
+        Alert.alert('Error', 'Grabación vacía o inexistente.');
+        return;
+      }
+
+      const data = await uploadAudioTask(uri, Math.min(9, Math.max(1, Number(taskIndex) || 1)));
+
+      Alert.alert(
+        data.match ? '¡Listo!' : 'Revisar',
+        data.match
+          ? `Coincidencia suficiente (sim=${data.similarity}). Tarea actualizada.`
+          : `No hubo suficiente match (sim=${data.similarity}).`
+      );
+    } catch (e: any) {
+      console.log('❌ upload error', e?.response?.data || e?.message);
+      Alert.alert('Error', e?.response?.data?.detail || e?.message || 'Fallo subiendo el audio');
+    } finally {
+      // siempre eliminar el archivo temporal
+      await deleteFile();
+      setUploading(false);
+    }
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <Header
@@ -43,25 +96,47 @@ export default function TareaLecturaScreen() {
         onInfoPress={() => navigation.navigate('Informacion')}
       />
 
-      <ScrollView contentContainerStyle={{ padding: spacing.xl }}>
-        <Text style={{ fontSize: 20, fontWeight: '800', color: colors.text }}>
-          {title}
-        </Text>
+      <View style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={{ padding: spacing.xl }}>
+          <Text style={styles.h1}>{title}</Text>
+          <Text style={styles.helper}>
+            {recording
+              ? 'Grabando… lee el texto con claridad.'
+              : 'Graba un audio leyendo el texto a continuación:'}
+          </Text>
 
-        <Text style={{ marginTop: spacing.md, color: colors.textMuted }}>
-          Graba un audio leyendo el texto a continuación:
-        </Text>
+          <View style={{ height: spacing.md }} />
+          <ReferenceTextBox text={referenceText} />
+          <View style={{ height: spacing.xl }} />
 
-        <View style={{ height: spacing.md }} />
-        <ReferenceTextBox text={referenceText} />
+          {!recording && !uploading && <RecordMicButton onPress={onStart} />}
 
-        <View style={{ height: spacing.xl }} />
-        <RecordMicButton
-          onPress={() => {}}
-          // recording={false} // en el futuro puedes togglear esto
-        />
-        <View style={{ height: spacing.xl }} />
-      </ScrollView>
+          {recording && (
+            <RecordingBar
+              seconds={(() => {
+                // convertir "mm:ss" a segundos para no tocar tu componente
+                const [mm, ss] = timer.split(':').map((t) => parseInt(t, 10) || 0);
+                return mm * 60 + ss;
+              })()}
+              onStop={onStop}
+            />
+          )}
+
+          {uploading && (
+            <View style={{ alignItems: 'center', marginTop: spacing.md }}>
+              <ActivityIndicator color={colors.primary} />
+              <Text style={{ color: colors.textMuted, marginTop: 8 }}>Enviando audio…</Text>
+            </View>
+          )}
+
+          <View style={{ height: spacing.xl }} />
+        </ScrollView>
+      </View>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  h1: { fontSize: 20, fontWeight: '800', color: colors.text },
+  helper: { marginTop: spacing.md, color: colors.textMuted },
+});
